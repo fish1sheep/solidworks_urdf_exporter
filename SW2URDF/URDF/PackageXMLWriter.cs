@@ -1,5 +1,6 @@
 ﻿using log4net;
 using SW2URDF.Utilities;
+using System.ComponentModel.Composition.Primitives;
 using System.Text;
 using System.Xml;
 
@@ -35,19 +36,22 @@ namespace SW2URDF.URDF
         public Dependencies dependencies;
         public Author author;
         public License license;
+        public Export export;
 
         public PackageXML(string name)
         {
             description = new Description(name);
 
             dependencies = new Dependencies(
-                new string[] { "catkin" },
+                new string[] { "ament_cmake" },
                 new string[] {
-                    "roslaunch", "robot_state_publisher", "rviz", "joint_state_publisher_gui", "gazebo" });
+                    "ros2launch", "robot_state_publisher", "rviz2", "joint_state_publisher_gui" });
 
             author = new Author("TODO");
 
             license = new License("BSD");
+
+            export = new Export(new string[] { "ament_cmake" });
         }
 
         public void WriteElement(PackageXMLWriter mWriter)
@@ -55,7 +59,7 @@ namespace SW2URDF.URDF
             XmlWriter writer = mWriter.writer;
             writer.WriteStartDocument();
             writer.WriteStartElement("package");
-            writer.WriteAttributeString("format", "2");
+            writer.WriteAttributeString("format", "3");
 
             description.WriteElement(writer);
 
@@ -65,8 +69,7 @@ namespace SW2URDF.URDF
 
             writer.WriteStartElement("export");
 
-            writer.WriteStartElement("architecture_independent");
-            writer.WriteEndElement();
+            export.WriteElement(writer);
 
             writer.WriteEndElement();
 
@@ -138,8 +141,29 @@ namespace SW2URDF.URDF
 
             foreach (string depend in buildExec)
             {
-                writer.WriteStartElement("depend");
+                writer.WriteStartElement("exec_depend");
                 writer.WriteString(depend);
+                writer.WriteEndElement();
+            }
+        }
+    }
+
+    //The build_type element of the manifest file
+    public class Export : PackageElement
+    {
+        private readonly string[] buildtype;
+
+        public Export(string[] buildtype)
+        {
+            this.buildtype = buildtype;
+        }
+
+        public void WriteElement(XmlWriter writer)
+        {
+            foreach (string export in buildtype)
+            {
+                writer.WriteStartElement("build_type");
+                writer.WriteString(export);
                 writer.WriteEndElement();
             }
         }

@@ -2,19 +2,13 @@
 
 Authored and maintained by [Stephen Brawner](brawner@gmail.com). Past supporters include [PickNik Consulting](https://picknik.ai), Verb Surgical, Open Robotics, and Willow Garage. 
 
-## Latest Release
+## Adapting to ROS2
 
-**SolidWorks 2021**
+1. Modified CMakeLists.txt to adapt to ROS2
+2. Modified package.xml to adapt to ROS2
+3. Added display.launch.py, which overflows the previous display.launch and gazebo.launch
 
-https://github.com/ros/solidworks_urdf_exporter/releases/tag/1.6.1
-
-**SolidWorks 2020**
-
-https://github.com/ros/solidworks_urdf_exporter/releases/tag/1.6.0
-
-**SolidWorks 2019 on 2018 SP 5**
-
-https://github.com/ros/solidworks_urdf_exporter/releases/tag/1.5.1
+- The new gazebo is not yet popular and gazebo11 is still widely used, so I will not write gazebo launch. Sorry. You can write it yourself if you need it.
 
 ## SolidWorks Version Requirements
 
