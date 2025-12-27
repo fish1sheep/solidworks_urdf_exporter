@@ -10,6 +10,8 @@ Authored and maintained by [Stephen Brawner](brawner@gmail.com). Past supporters
 
 - The new gazebo is not yet popular and gazebo11 is still widely used, so I will not write gazebo launch. Sorry. You can write it yourself if you need it.
 
+install: First install the official version, then use the release ZIP file to replace the files in C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\URDFExporter
+
 ## SolidWorks Version Requirements
 
 1. The minimum required version of SolidWorks for use with this add-in is 2018 Service Pack 5. SolidWorks 2017 or earlier may work. See [this issue](https://github.com/ros/solidworks_urdf_exporter/issues/73).
