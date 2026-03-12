@@ -10,7 +10,6 @@ Authored and maintained by [Stephen Brawner](brawner@gmail.com). Past supporters
 
 - The new gazebo is not yet popular and gazebo11 is still widely used, so I will not write gazebo launch. Sorry. You can write it yourself if you need it.
 
-install: First install the official version, then use the release ZIP file to replace the files in C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\URDFExporter
 
 ## SolidWorks Version Requirements
 
