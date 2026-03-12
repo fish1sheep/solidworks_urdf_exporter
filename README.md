@@ -10,6 +10,8 @@ Authored and maintained by [Stephen Brawner](brawner@gmail.com). Past supporters
 
 - The new gazebo is not yet popular and gazebo11 is still widely used, so I will not write gazebo launch. Sorry. You can write it yourself if you need it.
 
+## Install
+Install the official plugin first, then install my plugin to overwrite the existing one.
 
 ## SolidWorks Version Requirements
 
