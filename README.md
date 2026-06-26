@@ -18,6 +18,10 @@ This fork is based on [ros/solidworks_urdf_exporter](https://github.com/ros/soli
 
 - Fixed `display.launch.py` where the `urdf_path` launch argument was declared but never used
 - Fixed part export mode writing legacy `manifest.xml` instead of `package.xml`
+- Fixed empty joint name entry in `joint_names_*.yaml` config file
+- Fixed missing `rviz/` directory — now generates a default `urdf.rviz` config so `display.launch.py` can start RViz2 without errors
+- Fixed spurious `<safety_controller k_velocity="0"/>` written for every joint
+- Merged duplicate `GetJointNames` implementations to eliminate inconsistent behavior
 
 ### Packaging
 
