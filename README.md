@@ -2,13 +2,82 @@
 
 Authored and maintained by [Stephen Brawner](brawner@gmail.com). Past supporters include [PickNik Consulting](https://picknik.ai), Verb Surgical, Open Robotics, and Willow Garage. 
 
-## Adapting to ROS2
+## Changes from Upstream
 
-1. Modified CMakeLists.txt to adapt to ROS2
-2. Modified package.xml to adapt to ROS2
-3. Added display.launch.py, which overflows the previous display.launch and gazebo.launch
+This fork is based on [ros/solidworks_urdf_exporter](https://github.com/ros/solidworks_urdf_exporter) with the following improvements:
 
-- The new gazebo is not yet popular and gazebo11 is still widely used, so I will not write gazebo launch. Sorry. You can write it yourself if you need it.
+### ROS2 Migration
+
+- **package.xml**: Upgraded to ROS2 format 3 with `ament_cmake` build tool, added `<build_depend>` support, configurable author and version
+- **CMakeLists.txt**: Switched to `ament_cmake`, added `if(BUILD_TESTING)` and `ament_lint_auto` support
+- **display.launch.py**: Rewritten as a full ROS2 Python launch file with `urdf_path`, `use_sim_time`, `use_gui`, and `rviz_config` launch arguments
+- **joint_names YAML**: Uses ROS2-neutral format (`joint_names` instead of ROS1 `controller_joint_names`)
+- **Mesh paths**: Unified to `package://` URIs, resolved via ament resource index
+
+### Bug Fixes
+
+- Fixed `display.launch.py` where the `urdf_path` launch argument was declared but never used
+- Fixed part export mode writing legacy `manifest.xml` instead of `package.xml`
+
+### Packaging
+
+- Fixed Inno Setup installer script (`INSTALL/Install.iss`) for Release configuration
+- Added ROS2 colcon build artifacts (`build/`, `install/`) to `.gitignore`
+
+### Known Limitations
+
+- Gazebo simulation launch file not yet implemented
+- No ros2_control or xacro support (planned)
+
+---
+
+## Installation & Usage
+
+### Option 1: Pre-built Installer
+
+1. Download `sw2urdfSetup.exe` from [Releases](../../releases)
+2. Run as **Administrator** and follow the wizard
+3. Launch SolidWorks — "Export as URDF" appears under the **Tools** menu
+
+### Option 2: Build the Installer
+
+1. Install [Inno Setup](https://jrsoftware.org/isdl.php) (free)
+2. Build `SW2URDF` in Visual Studio with **Release + x64** configuration
+3. Open `INSTALL\Install.iss` in Inno Setup, **Build → Compile**
+4. The installer is generated at `INSTALL\OUTPUT\sw2urdfSetup.exe`
+
+### Option 3: Development / Debug
+
+1. Build in Visual Studio with **Debug + x64** configuration
+2. The post-build event auto-registers the COM DLL via `RegAsm.exe /codebase`
+3. Launch SolidWorks directly — the add-in loads automatically
+
+### Using Exported Packages with ROS2
+
+Copy the exported package to your ROS2 workspace, build, and launch:
+
+```bash
+cp -r <PackageName> ~/ros2_ws/src/
+cd ~/ros2_ws
+colcon build --packages-select <PackageName>
+source install/setup.bash
+ros2 launch <PackageName> display.launch.py
+```
+
+Optional launch arguments:
+
+```bash
+ros2 launch <PackageName> display.launch.py \
+    urdf_path:=/path/to/custom.urdf \
+    use_sim_time:=true \
+    use_gui:=true
+```
+
+### Uninstall
+
+Via Windows Control Panel → Programs and Features → Uninstall "SolidWorks To URDF", or re-run the installer and choose Remove.
+
+---
 
 ## SolidWorks Version Requirements
 

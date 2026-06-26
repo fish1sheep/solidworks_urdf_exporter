@@ -332,3 +332,7 @@ ASALocalRun/
 *.zip
 
 SW2URDF/Versioning/VersionInfo.cs
+
+# ROS2 build artifacts (colcon / ament build)
+build/
+install/

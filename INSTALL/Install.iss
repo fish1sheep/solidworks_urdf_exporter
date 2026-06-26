@@ -8,8 +8,8 @@
 
 #define MainBinaryName  "SW2URDF.dll"
 #define SetupBaseName   "sw2urdfSetup_"
-#define DllLocation     AddBackslash(SourcePath + "..\SW2URDF\bin\x64\Debug") + MainBinaryName
-#define BuildVersion    GetFileVersion(DllLocation)
+#define DllLocation     AddBackslash(SourcePath + "..\SW2URDF\bin\x64\Release") + MainBinaryName
+#define BuildVersion    GetVersionNumbersString(DllLocation)
 #define CommitVersion   GetFileProductVersion(DllLocation)
 #define AVF1            Copy(BuildVersion, 1, Pos(".", BuildVersion) - 1) + "_" + Copy(BuildVersion, Pos(".", BuildVersion) + 1)
 #define AVF2            Copy(AVF1,       1, Pos(".", AVF1      ) - 1) + "_" + Copy(AVF1      , Pos(".", AVF1      ) + 1)
@@ -39,17 +39,33 @@ SolidCompression=no
 PrivilegesRequired=admin
 OutputDir=..\..\INSTALL\OUTPUT
 SourceDir=..\SW2URDF\bin\
-ArchitecturesAllowed=x64
-ArchitecturesInstallIn64BitMode=x64
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: x64\Debug\*;  DestDir: {app}; Flags: ignoreversion; Check: IsWin64;
-;Source: x86\Debug\*;  DestDir: {app}; Flags: regserver ignoreversion; Check: not IsWin64
+; 主插件 DLL 和 COM 类型库
+Source: x64\Release\SW2URDF.dll;    DestDir: {app}; Flags: ignoreversion; Check: IsWin64
+Source: x64\Release\SW2URDF.tlb;    DestDir: {app}; Flags: ignoreversion; Check: IsWin64
+Source: x64\Release\SW2URDF.png;    DestDir: {app}; Flags: ignoreversion; Check: IsWin64
 
-; NOTE: Don't use "Flags: ignoreversion" on any shared system files
+; SolidWorks 工具库（SW2URDF 依赖）
+Source: x64\Release\solidworkstools.dll; DestDir: {app}; Flags: ignoreversion; Check: IsWin64
+
+; 日志库
+Source: x64\Release\log4net.dll;     DestDir: {app}; Flags: ignoreversion; Check: IsWin64
+
+; 数学运算库（坐标变换、惯性计算）
+Source: x64\Release\MathNet.Numerics.dll; DestDir: {app}; Flags: ignoreversion; Check: IsWin64
+
+; CSV 解析库（CSV 导入导出）
+Source: x64\Release\CsvHelper.dll;   DestDir: {app}; Flags: ignoreversion; Check: IsWin64
+
+; CsvHelper 的传递依赖
+Source: x64\Release\System.Runtime.CompilerServices.Unsafe.dll; DestDir: {app}; Flags: ignoreversion; Check: IsWin64
+Source: x64\Release\System.Threading.Tasks.Extensions.dll;       DestDir: {app}; Flags: ignoreversion; Check: IsWin64
 
 [Run]                                                        
 Filename: "{reg:HKLM64\SOFTWARE\Microsoft\.NETFramework,InstallRoot}\v4.0.30319\RegAsm.exe"; Parameters: """{app}\SW2URDF.dll"" ""/codebase"""; StatusMsg: Registering controls ...; Check: IsWin64; Languages:
@@ -60,5 +76,4 @@ Root: HKLM64; Subkey: "SOFTWARE\SolidWorks\Addins\65c9fc17-6a74-45a3-8f84-551859
 Root: HKCU64; Subkey: "Software\SolidWorks\AddInsStartup\65c9fc17-6a74-45a3-8f84-55185900275d"; ValueType: none; ValueName: ""; Flags: dontcreatekey deletekey uninsdeletevalue; Check: IsWin64
 
 [UninstallRun]
-
-Filename: "{reg:HKLM64\SOFTWARE\Microsoft\.NETFramework,InstallRoot}\v4.0.30319\RegAsm.exe"; Parameters:  """{app}\SW2URDF.dll"" ""/unregister"""; StatusMsg: Unregistering controls ...; Check: IsWin64; Languages:
+Filename: "{reg:HKLM64\SOFTWARE\Microsoft\.NETFramework,InstallRoot}\v4.0.30319\RegAsm.exe"; Parameters:  """{app}\SW2URDF.dll"" ""/unregister"""; StatusMsg: Unregistering controls ...; Check: IsWin64; Languages: ; RunOnceId: "UnregisterSW2URDF"

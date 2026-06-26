@@ -142,15 +142,33 @@ namespace SW2URDF.URDFExport
         #region Export Methods
 
         // Beginning method for exporting the full package
+        /// <summary>
+        /// Exports a complete robot assembly as a ROS2 URDF description package.
+        ///
+        /// This method performs the full export workflow:
+        ///   1. Create package directory structure (package, meshes, urdf, launch, config, textures)
+        ///   2. Generate CMakeLists.txt (ament_cmake format)
+        ///   3. Generate package.xml (ROS2 format 3)
+        ///   4. Generate joint name configuration YAML
+        ///   5. Generate display.launch.py (ROS2 Python launch file)
+        ///   6. Save mesh files (STL or 3DXML format)
+        ///   7. Write URDF XML file
+        ///   8. Export CSV data file
+        ///
+        /// Note: This method temporarily modifies SolidWorks STL export preferences
+        /// and restores the user's original settings on completion.
+        /// </summary>
+        /// <param name="exportSTL">Whether to export mesh files (default true)</param>
+        /// <param name="meshFormat">Mesh export format (STL or 3DXML, default STL)</param>
         public void ExportRobot(bool exportSTL = true, MeshExportFormat meshFormat = MeshExportFormat.STL)
         {
-            //Setting up the progress bar
+            // Initialize the progress bar
             logger.Info("Beginning the export process");
             int progressBarBound = CommonSwOperations.GetCount(URDFRobot.BaseLink);
             iSwApp.GetUserProgressBar(out progressBar);
             progressBar.Start(0, progressBarBound, "Creating package directories");
 
-            //Creating package directories
+            // Create package directory structure
             logger.Info("Creating package directories with name " + PackageName + " and save path " + SavePath);
             URDFPackage package = new URDFPackage(PackageName, SavePath);
             package.CreateDirectories();
@@ -159,39 +177,38 @@ namespace SW2URDF.URDFExport
             string windowsCSVFileName = package.WindowsRobotsDirectory + URDFRobot.Name + ".csv";
             string windowsPackageXMLFileName = package.WindowsPackageDirectory + "package.xml";
 
-            //Create CMakeLists
+            // Generate CMakeLists.txt (ament_cmake format)
             logger.Info("Creating CMakeLists.txt at " + package.WindowsCMakeLists);
             package.CreateCMakeLists();
 
-            //Create Config joint names, not sure how this is used...
+            // Generate joint name configuration YAML (ROS2-neutral format)
             logger.Info("Creating joint names config at " + package.WindowsConfigYAML);
             package.CreateConfigYAML(URDFRobot.GetJointNames(false));
 
-            //Creating package.xml file
+            // Generate package.xml manifest (ROS2 format 3)
             logger.Info("Creating package.xml at " + windowsPackageXMLFileName);
             PackageXMLWriter packageXMLWriter = new PackageXMLWriter(windowsPackageXMLFileName);
             PackageXML packageXML = new PackageXML(PackageName);
             packageXML.WriteElement(packageXMLWriter);
 
-            //Creating RVIZ launch file
+            // Generate display.launch.py (ROS2 Python launch file)
             Rviz rviz = new Rviz(PackageName, URDFRobot.Name + ".urdf");
             logger.Info("Creating RVIZ launch file in " + package.WindowsLaunchDirectory);
             rviz.WriteFiles(package.WindowsLaunchDirectory);
 
-            //Creating Gazebo launch file
+            // Generate Gazebo launch file (currently a placeholder)
             Gazebo gazebo = new Gazebo(URDFRobot.Name, PackageName, URDFRobot.Name + ".urdf");
             logger.Info("Creating Gazebo launch file in " + package.WindowsLaunchDirectory);
-
             gazebo.WriteFile(package.WindowsLaunchDirectory);
 
-            //Customizing STL preferences to how I want them
+            // Save user's STL preferences, then apply export-required settings
             logger.Info("Saving existing STL preferences");
             SaveUserPreferences();
 
             logger.Info("Modifying STL preferences");
             SetSTLExportPreferences();
 
-            //Saving part as STL mesh
+            // Hide all components, then export mesh files for each link individually
             AssemblyDoc assyDoc = (AssemblyDoc)ActiveSWModel;
             List<string> hiddenComponents = CommonSwOperations.FindHiddenComponents(assyDoc.GetComponents(false));
             logger.Info("Found " + hiddenComponents.Count + " hidden components " + String.Join(", ", hiddenComponents));
@@ -212,6 +229,7 @@ namespace SW2URDF.URDFExport
             }
             finally
             {
+                // Restore component visibility (previously hidden components stay hidden)
                 logger.Info("Showing all components except previously hidden components");
                 CommonSwOperations.ShowAllComponents(ActiveSWModel, hiddenComponents);
 
@@ -226,15 +244,19 @@ namespace SW2URDF.URDFExport
                 return;
             }
 
+            // Write the URDF model to XML file
             logger.Info("Writing URDF file to " + windowsURDFFileName);
             URDFWriter uWriter = new URDFWriter(windowsURDFFileName);
             URDFRobot.WriteURDF(uWriter.writer);
 
+            // Export CSV data file (for batch property editing)
             ImportExport.WriteRobotToCSV(URDFRobot, windowsCSVFileName);
 
+            // Copy log file to the package directory
             logger.Info("Copying log file");
             CopyLogFile(package);
 
+            // Restore user's original STL preferences
             logger.Info("Resetting STL preferences");
             ResetUserPreferences();
             progressBar.End();
@@ -294,28 +316,26 @@ namespace SW2URDF.URDFExport
                 }
             }
 
-            // Create the mesh filenames. SolidWorks likes to use / but that will get messy in filenames so use _ instead
-            string linkName = link.Name.Replace('/', '_');
-            string meshFilename = package.MeshesDirectory + linkName;
-            string windowsMeshFileName = package.WindowsMeshesDirectory + linkName;
-            switch(meshFormat)
+            // Build package:// URI and Windows absolute path for the mesh file.
+            // SolidWorks uses '/' as a component name separator — replace with '_'
+            // to avoid filesystem path conflicts.
+            string extension;
+            switch (meshFormat)
             {
-                case MeshExportFormat.STL:
-                    meshFilename += ".STL";
-                    windowsMeshFileName += ".STL";
-                    break;
-
                 case MeshExportFormat.THREEDXML:
-                    meshFilename += ".3dxml";
-                    windowsMeshFileName += ".3dxml";
+                    extension = ".3dxml";
                     break;
 
+                case MeshExportFormat.STL:
                 default:
-                    meshFilename += ".STL";
-                    windowsMeshFileName += ".STL";
+                    extension = ".STL";
                     break;
             }
-            // Export STL
+
+            string meshFilename = package.GetMeshPackageUri(link.Name, extension);
+            string windowsMeshFileName = package.GetWindowsMeshPath(link.Name, extension);
+
+            // Export the mesh file (STL or 3DXML format)
             if (exportSTL)
             {
                 switch (meshFormat)
@@ -333,6 +353,9 @@ namespace SW2URDF.URDFExport
                         break;
                 }
             }
+
+            // Write the package:// URI into the URDF model.
+            // ROS2 resolves package:// prefixes at runtime via the ament resource index.
             link.Visual.Geometry.Mesh.Filename = meshFilename;
             link.Collision.Geometry.Mesh.Filename = meshFilename;
         }
@@ -464,6 +487,14 @@ namespace SW2URDF.URDFExport
             return success;
         }
 
+        /// <summary>
+        /// Exports a single part as a URDF package (used in SolidWorks part mode).
+        ///
+        /// Unlike ExportRobot() (assembly mode), this method handles only a single base link
+        /// without creating child links or joint trees. The generated package structure is
+        /// consistent with the assembly export, using ROS2 package.xml (not legacy manifest.xml).
+        /// </summary>
+        /// <param name="zIsUp">Whether Z is up (true applies a coordinate rotation for ROS convention)</param>
         public void ExportLink(bool zIsUp)
         {
             CreateBaseRefOrigin(zIsUp);
@@ -473,33 +504,38 @@ namespace SW2URDF.URDFExport
 
             LocalizeLink(URDFRobot.BaseLink, GlobalTransform);
 
-            //Creating package directories
+            // Create package directory structure
             URDFPackage package = new URDFPackage(PackageName, SavePath);
             package.CreateDirectories();
-            string meshFileName = package.MeshesDirectory + URDFRobot.BaseLink.Name + ".STL";
-            string windowsMeshFileName = package.WindowsMeshesDirectory + URDFRobot.BaseLink.Name + ".STL";
+
+            // Use package:// URI for mesh references in the URDF (consistent with ExportRobot)
+            string meshFileName = package.GetMeshPackageUri(URDFRobot.BaseLink.Name, ".STL");
+            string windowsMeshFileName = package.GetWindowsMeshPath(URDFRobot.BaseLink.Name, ".STL");
             string windowsURDFFileName = package.WindowsRobotsDirectory + URDFRobot.Name + ".urdf";
-            string windowsManifestFileName = package.WindowsPackageDirectory + "manifest.xml";
 
-            //Creating manifest file
-            PackageXMLWriter manifestWriter = new PackageXMLWriter(windowsManifestFileName);
-            PackageXML Manifest = new PackageXML(URDFRobot.Name);
-            Manifest.WriteElement(manifestWriter);
+            // Create package.xml manifest (ROS2 format 3, not legacy manifest.xml)
+            string windowsPackageXMLFileName = package.WindowsPackageDirectory + "package.xml";
+            logger.Info("Creating package.xml at " + windowsPackageXMLFileName);
+            PackageXMLWriter packageXMLWriter = new PackageXMLWriter(windowsPackageXMLFileName);
+            PackageXML packageXML = new PackageXML(URDFRobot.Name);
+            packageXML.WriteElement(packageXMLWriter);
 
-            //Customizing STL preferences to how I want them
+            // Save user's STL preferences, then apply export-required settings
             SaveUserPreferences();
             SetSTLExportPreferences();
             SetLinkSpecificSTLPreferences("", URDFRobot.BaseLink.STLQualityFine, ActiveSWModel);
             int errors = 0;
             int warnings = 0;
 
-            //Saving part as STL mesh
-
+            // Save the part as an STL mesh file
             ActiveSWModel.Extension.SaveAs(windowsMeshFileName, (int)swSaveAsVersion_e.swSaveAsCurrentVersion,
                 (int)swSaveAsOptions_e.swSaveAsOptions_Silent, null, ref errors, ref warnings);
+
+            // Write the package:// URI into the URDF model
             URDFRobot.BaseLink.Visual.Geometry.Mesh.Filename = meshFileName;
             URDFRobot.BaseLink.Collision.Geometry.Mesh.Filename = meshFileName;
 
+            // Copy texture file to the package's textures directory
             URDFRobot.BaseLink.Visual.Material.Texture.Filename =
                 package.TexturesDirectory + Path.GetFileName(URDFRobot.BaseLink.Visual.Material.Texture.wFilename);
             string textureSavePath =
@@ -509,9 +545,8 @@ namespace SW2URDF.URDFExport
                 File.Copy(URDFRobot.BaseLink.Visual.Material.Texture.wFilename, textureSavePath, true);
             }
 
-            //Writing URDF to file
+            // Write the URDF model to XML file
             URDFWriter uWriter = new URDFWriter(windowsURDFFileName);
-            //mRobot.addLink(mLink);
             URDFRobot.WriteURDF(uWriter.writer);
 
             ResetUserPreferences();

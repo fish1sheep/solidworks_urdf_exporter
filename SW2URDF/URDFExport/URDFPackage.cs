@@ -1,4 +1,4 @@
-﻿/*
+/*
 Copyright (c) 2015 Stephen Brawner
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -26,17 +26,66 @@ using System.IO;
 
 namespace SW2URDF.URDFExport
 {
+    /// <summary>
+    /// ROS2 URDF description package generator.
+    /// Manages package directory structure, paths, and ROS2-specific build files
+    /// (CMakeLists.txt, package.xml, joint_names YAML).
+    ///
+    /// Generated package structure:
+    ///   &lt;PackageName&gt;/
+    ///   ├── CMakeLists.txt              # ament_cmake build configuration
+    ///   ├── package.xml                 # ROS2 package format 3 manifest
+    ///   ├── config/
+    ///   │   └── joint_names_&lt;name&gt;.yaml  # Joint name list
+    ///   ├── launch/
+    ///   │   └── display.launch.py       # RViz visualization launch file
+    ///   ├── meshes/
+    ///   │   └── *.STL / *.3dxml         # Mesh files
+    ///   └── urdf/
+    ///       └── &lt;name&gt;.urdf             # URDF robot description file
+    /// </summary>
     public class URDFPackage
     {
         public static IMessageBox MessageBox = new MessageBoxHelper();
+
+        /// <summary>
+        /// ROS2 package name (e.g. "my_robot_description").
+        /// </summary>
         public string PackageName { get; }
 
+        // ---- package:// URI paths (used for intra-URDF references) ----
+
+        /// <summary>
+        /// Base package:// URI for the package (e.g. package://my_robot_description/).
+        /// </summary>
         public string PackageDirectory { get; }
+
+        /// <summary>
+        /// package:// URI directory for mesh files (e.g. package://my_robot_description/meshes/).
+        /// </summary>
         public string MeshesDirectory { get; }
+
+        /// <summary>
+        /// package:// URI directory for texture files.
+        /// </summary>
         public string TexturesDirectory { get; }
+
+        /// <summary>
+        /// package:// URI directory for URDF files.
+        /// </summary>
         public string RobotsDirectory { get; }
-        public string ConfigDirectory { get; }
+
+        /// <summary>
+        /// package:// URI directory for launch files.
+        /// </summary>
         public string LaunchDirectory { get; }
+
+        /// <summary>
+        /// package:// URI directory for configuration files.
+        /// </summary>
+        public string ConfigDirectory { get; }
+
+        // ---- Windows filesystem absolute paths (used for actual file I/O) ----
 
         public string WindowsPackageDirectory { get; }
         public string WindowsMeshesDirectory { get; }
@@ -47,9 +96,16 @@ namespace SW2URDF.URDFExport
         public string WindowsCMakeLists { get; }
         public string WindowsConfigYAML { get; }
 
+        /// <summary>
+        /// Constructs a URDFPackage instance and initializes all path properties.
+        /// </summary>
+        /// <param name="name">ROS2 package name</param>
+        /// <param name="dir">Export root directory (Windows absolute path)</param>
         public URDFPackage(string name, string dir)
         {
             PackageName = name;
+
+            // Build package:// URI paths (used for mesh references inside URDF files)
             PackageDirectory = @"package://" + name + @"/";
             MeshesDirectory = PackageDirectory + @"meshes/";
             RobotsDirectory = PackageDirectory + @"urdf/";
@@ -57,6 +113,7 @@ namespace SW2URDF.URDFExport
             LaunchDirectory = PackageDirectory + @"launch/";
             ConfigDirectory = PackageDirectory + @"config/";
 
+            // Build Windows filesystem paths (used for actual file writing)
             char last = dir[dir.Length - 1];
             dir = (last == '\\') ? dir : dir + @"\";
             WindowsPackageDirectory = dir + name + @"\";
@@ -69,6 +126,11 @@ namespace SW2URDF.URDFExport
             WindowsConfigYAML = WindowsConfigDirectory + @"joint_names_" + name + ".yaml";
         }
 
+        /// <summary>
+        /// Creates the full package directory structure
+        /// (package, meshes, urdf, textures, launch, config).
+        /// Existing directories are skipped.
+        /// </summary>
         public void CreateDirectories()
         {
             MessageBox.Show("Creating URDF Package \"" +
@@ -99,32 +161,134 @@ namespace SW2URDF.URDFExport
             }
         }
 
+        /// <summary>
+        /// Generates a ROS2 ament_cmake-style CMakeLists.txt file.
+        ///
+        /// This is a pure description package (no compiled code). It only installs
+        /// the config, launch, meshes, and urdf directories under share/${PROJECT_NAME}
+        /// so that resource files can be located via the ament resource index.
+        ///
+        /// Generated CMake structure:
+        ///   - cmake_minimum_required: minimum CMake version
+        ///   - project: project name declaration
+        ///   - find_package(ament_cmake REQUIRED): locate the ament_cmake build system
+        ///   - install(DIRECTORY ...): install resource directories to share/
+        ///   - if(BUILD_TESTING): enable lint checks in CI test builds
+        ///   - ament_package(): declare as an ament package
+        /// </summary>
         public void CreateCMakeLists()
         {
             using (StreamWriter file = new StreamWriter(WindowsCMakeLists))
             {
-                file.WriteLine("cmake_minimum_required(VERSION 3.8)\r\n");
-                file.WriteLine("project(" + PackageName + ")\r\n");
-                file.WriteLine("find_package(ament_cmake REQUIRED)\r\n");
-                file.WriteLine("install(DIRECTORY config launch meshes urdf/");
-                file.WriteLine("\tDESTINATION share/${PROJECT_NAME})");
+                // CMake file header comment
+                file.WriteLine("# Auto-generated CMakeLists.txt — created by SolidWorks URDF Exporter");
+                file.WriteLine();
+
+                // Minimum CMake version (ROS2 Humble+ recommends 3.8 or higher)
+                file.WriteLine("cmake_minimum_required(VERSION 3.8)");
+                file.WriteLine();
+
+                // Project declaration
+                file.WriteLine("project(" + PackageName + ")");
+                file.WriteLine();
+
+                // Find ament_cmake build system (required for ROS2)
+                file.WriteLine("# Find the ament_cmake build system (required for ROS2)");
+                file.WriteLine("find_package(ament_cmake REQUIRED)");
+                file.WriteLine();
+
+                // Install resource directories into the package's share directory.
+                // After installation, mesh files can be resolved via package://PackageName/meshes/...
+                file.WriteLine("# Install all resource directories into the package share directory");
+                file.WriteLine("# These files are located at runtime via the ament resource index");
+                file.WriteLine("install(");
+                file.WriteLine("  DIRECTORY config launch meshes urdf");
+                file.WriteLine("  DESTINATION share/${PROJECT_NAME}");
+                file.WriteLine(")");
+                file.WriteLine();
+
+                // Test build support (lint checks in CI)
+                file.WriteLine("# Enable lint checks in test builds (e.g. CI)");
+                file.WriteLine("if(BUILD_TESTING)");
+                file.WriteLine("  find_package(ament_lint_auto REQUIRED)");
+                file.WriteLine("  # Automatically discover linter packages declared as test_depend");
+                file.WriteLine("  ament_lint_auto_find_test_dependencies()");
+                file.WriteLine("endif()");
+                file.WriteLine();
+
+                // Declare as an ament package
+                file.WriteLine("# Declare as an ament package (required for ROS2)");
                 file.WriteLine("ament_package()");
             }
         }
 
+        /// <summary>
+        /// Generates a joint name configuration YAML file.
+        ///
+        /// Output format (ROS2-neutral, compatible with ros2_control):
+        ///   # Joint name list — auto-generated by SolidWorks URDF Exporter
+        ///   joint_names:
+        ///     - joint_1
+        ///     - joint_2
+        ///     - ...
+        ///
+        /// This file can be used for:
+        ///   - Joint ordering reference in controller configuration
+        ///   - The joint field in ros2_control controller YAML
+        ///   - Passing joint parameters in launch scripts
+        /// </summary>
+        /// <param name="jointNames">Array of joint names in URDF traversal order</param>
         public void CreateConfigYAML(String[] jointNames)
         {
             using (StreamWriter file = new StreamWriter(WindowsConfigYAML))
             {
-                file.Write("controller_joint_names: " + "[");
+                // YAML file header comment
+                file.WriteLine("# Joint name list — auto-generated by SolidWorks URDF Exporter");
+                file.WriteLine("# Can be used for controller configuration or joint ordering reference");
+                file.WriteLine();
 
+                // Use the ROS2-neutral "joint_names" key (replaces ROS1 "controller_joint_names")
+                file.WriteLine("joint_names:");
+
+                // Output each joint name as a YAML list item
                 foreach (String name in jointNames)
                 {
-                    file.Write("'" + name + "', ");
+                    file.WriteLine("  - " + name);
                 }
-
-                file.WriteLine("]");
             }
+        }
+
+        /// <summary>
+        /// Returns the package:// URI path for a mesh file within this package.
+        /// Format: package://&lt;PackageName&gt;/meshes/&lt;linkName&gt;.&lt;extension&gt;
+        ///
+        /// In ROS2, robot_state_publisher resolves package:// prefixes via the
+        /// ament resource index. Therefore mesh files must be installed to
+        /// share/&lt;PackageName&gt;/meshes/ via CMakeLists.txt.
+        ///
+        /// Forward slash characters '/' in link names are replaced with underscores '_'
+        /// to avoid filesystem path conflicts.
+        /// </summary>
+        /// <param name="linkName">Link name (e.g. "base_link" or "arm/link_1")</param>
+        /// <param name="extension">File extension with leading dot (e.g. ".STL" or ".3dxml")</param>
+        /// <returns>package:// format mesh URI string</returns>
+        public string GetMeshPackageUri(string linkName, string extension)
+        {
+            // Replace forward slashes with underscores to avoid illegal filename characters
+            string sanitized = linkName.Replace('/', '_');
+            return MeshesDirectory + sanitized + extension;
+        }
+
+        /// <summary>
+        /// Returns the Windows absolute filesystem path for a mesh file.
+        /// </summary>
+        /// <param name="linkName">Link name (slashes replaced with underscores)</param>
+        /// <param name="extension">File extension with leading dot (e.g. ".STL" or ".3dxml")</param>
+        /// <returns>Windows absolute path string</returns>
+        public string GetWindowsMeshPath(string linkName, string extension)
+        {
+            string sanitized = linkName.Replace('/', '_');
+            return WindowsMeshesDirectory + sanitized + extension;
         }
     }
 }
