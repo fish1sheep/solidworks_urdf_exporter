@@ -73,5 +73,18 @@ namespace SW2URDF.URDF
             KPositionAttribute.SetDoubleValueFromString(boxPosition.Text);
             KVelocityAttribute.SetDoubleValueFromString(boxVelocity.Text);
         }
+
+        /// <summary>
+        /// Override to suppress writing the safety_controller element when no meaningful
+        /// values have been set (all attributes are null or zero).
+        /// </summary>
+        public override bool ElementContainsData()
+        {
+            // Only emit safety_controller if at least one attribute has a non-null, non-zero value
+            return (SoftLowerAttribute.Value != null && (double)SoftLowerAttribute.Value != 0.0) ||
+                   (SoftUpperAttribute.Value != null && (double)SoftUpperAttribute.Value != 0.0) ||
+                   (KPositionAttribute.Value != null && (double)KPositionAttribute.Value != 0.0) ||
+                   (KVelocityAttribute.Value != null && (double)KVelocityAttribute.Value != 0.0);
+        }
     }
 }
