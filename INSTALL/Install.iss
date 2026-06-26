@@ -2,8 +2,8 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "SolidWorks To URDF"
-#define MyAppVersion "2018 v1.6"
-#define MyAppPublisher "Stephen Brawner"
+#define MyAppVersion "2026 v1.0.5"
+#define MyAppPublisher "fish1sheep"
 #define MyAppURL "http://wiki.ros.org/sw_urdf_exporter"
 
 #define MainBinaryName  "SW2URDF.dll"
@@ -21,6 +21,7 @@
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 AppId={{E43E85A9-071D-430A-91B2-84B7AB923170}
 AppName={#MyAppName}
+WizardStyle=modern
 AppVersion={#CommitVersion}
 VersionInfoVersion={#BuildVersion}
 VersionInfoCopyright=2019
@@ -43,7 +44,29 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 
 [Languages]
-Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "english";             MessagesFile: "compiler:Default.isl"
+Name: "chinesesimplified";   MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "japanese";            MessagesFile: "compiler:Languages\Japanese.isl"
+Name: "german";              MessagesFile: "compiler:Languages\German.isl"
+
+[CustomMessages]
+; StatusMsg for [Run] - Registering controls
+english.StatusRegistering=Registering controls ...
+chinesesimplified.StatusRegistering=正在注册控件...
+japanese.StatusRegistering=コントロールを登録しています...
+german.StatusRegistering=Steuerelemente werden registriert ...
+
+; StatusMsg for [UninstallRun] - Unregistering controls
+english.StatusUnregistering=Unregistering controls ...
+chinesesimplified.StatusUnregistering=正在注销控件...
+japanese.StatusUnregistering=コントロールの登録を解除しています...
+german.StatusUnregistering=Registrierung der Steuerelemente wird aufgehoben ...
+
+; StatusMsg for [UninstallRun] - Cleaning up COM registration
+english.StatusCleanupCOM=Cleaning up COM registration...
+chinesesimplified.StatusCleanupCOM=正在清理 COM 注册...
+japanese.StatusCleanupCOM=COM 登録をクリーンアップしています...
+german.StatusCleanupCOM=COM-Registrierung wird bereinigt ...
 
 [Files]
 ; 主插件 DLL 和所有依赖（RegAsm 注册时需要全部依赖，缺一不可）
@@ -55,7 +78,7 @@ Source: x64\Release\SW2URDF.png;    DestDir: {app}; Flags: ignoreversion; Check:
 Source: x64\Release\images\*; DestDir: {app}\images; Flags: ignoreversion; Check: IsWin64
 
 [Run]                                                        
-Filename: "{reg:HKLM64\SOFTWARE\Microsoft\.NETFramework,InstallRoot}\v4.0.30319\RegAsm.exe"; Parameters: """{app}\SW2URDF.dll"" ""/codebase"""; StatusMsg: Registering controls ...; Check: IsWin64
+Filename: "{reg:HKLM64\SOFTWARE\Microsoft\.NETFramework,InstallRoot}\v4.0.30319\RegAsm.exe"; Parameters: """{app}\SW2URDF.dll"" ""/codebase"""; StatusMsg: "{cm:StatusRegistering}"; Check: IsWin64
 
 
 [Registry]
@@ -65,6 +88,6 @@ Root: HKCU64; Subkey: "Software\SolidWorks\AddInsStartup\65c9fc17-6a74-45a3-8f84
 
 [UninstallRun]
 ; 正常 .NET COM 反注册
-Filename: "{reg:HKLM64\SOFTWARE\Microsoft\.NETFramework,InstallRoot}\v4.0.30319\RegAsm.exe"; Parameters:  """{app}\SW2URDF.dll"" ""/unregister"""; StatusMsg: Unregistering controls ...; Check: IsWin64; RunOnceId: "UnregisterSW2URDF"
+Filename: "{reg:HKLM64\SOFTWARE\Microsoft\.NETFramework,InstallRoot}\v4.0.30319\RegAsm.exe"; Parameters:  """{app}\SW2URDF.dll"" ""/unregister"""; StatusMsg: "{cm:StatusUnregistering}"; Check: IsWin64; RunOnceId: "UnregisterSW2URDF"
 ; 强制清除 COM CLSID 注册表残留（即使 RegAsm 失败也能清理干净）
-Filename: "reg.exe"; Parameters: "delete ""HKLM\SOFTWARE\Classes\CLSID\{{65c9fc17-6a74-45a3-8f84-55185900275d}}"" /f"; StatusMsg: Cleaning up COM registration...; Check: IsWin64; RunOnceId: "DeleteCLSID"
+Filename: "reg.exe"; Parameters: "delete ""HKLM\SOFTWARE\Classes\CLSID\{{65c9fc17-6a74-45a3-8f84-55185900275d}}"" /f"; StatusMsg: "{cm:StatusCleanupCOM}"; Check: IsWin64; RunOnceId: "DeleteCLSID"
