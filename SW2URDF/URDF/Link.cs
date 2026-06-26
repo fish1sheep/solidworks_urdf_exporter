@@ -189,7 +189,7 @@ namespace SW2URDF.URDF
         {
             List<string> names = new List<string>();
 
-            if (Joint != null && (includeFixed || Joint.Type != "fixed"))
+            if (Joint != null && !string.IsNullOrEmpty(Joint.Name) && (includeFixed || Joint.Type != "fixed"))
             {
                 names.Add(Joint.Name);
             }

@@ -93,6 +93,8 @@ namespace SW2URDF.URDFExport
         public string WindowsRobotsDirectory { get; }
         public string WindowsLaunchDirectory { get; }
         public string WindowsConfigDirectory { get; }
+        public string WindowsRvizDirectory { get; }
+        public string WindowsRvizConfig { get; }
         public string WindowsCMakeLists { get; }
         public string WindowsConfigYAML { get; }
 
@@ -122,6 +124,8 @@ namespace SW2URDF.URDFExport
             WindowsTexturesDirectory = WindowsPackageDirectory + @"textures\";
             WindowsLaunchDirectory = WindowsPackageDirectory + @"launch\";
             WindowsConfigDirectory = WindowsPackageDirectory + @"config\";
+            WindowsRvizDirectory = WindowsPackageDirectory + @"rviz\";
+            WindowsRvizConfig = WindowsRvizDirectory + @"urdf.rviz";
             WindowsCMakeLists = WindowsPackageDirectory + @"CMakeLists.txt";
             WindowsConfigYAML = WindowsConfigDirectory + @"joint_names_" + name + ".yaml";
         }
@@ -158,6 +162,10 @@ namespace SW2URDF.URDFExport
             if (!Directory.Exists(WindowsConfigDirectory))
             {
                 Directory.CreateDirectory(WindowsConfigDirectory);
+            }
+            if (!Directory.Exists(WindowsRvizDirectory))
+            {
+                Directory.CreateDirectory(WindowsRvizDirectory);
             }
         }
 
@@ -202,7 +210,7 @@ namespace SW2URDF.URDFExport
                 file.WriteLine("# Install all resource directories into the package share directory");
                 file.WriteLine("# These files are located at runtime via the ament resource index");
                 file.WriteLine("install(");
-                file.WriteLine("  DIRECTORY config launch meshes urdf");
+                file.WriteLine("  DIRECTORY config launch meshes urdf rviz");
                 file.WriteLine("  DESTINATION share/${PROJECT_NAME}");
                 file.WriteLine(")");
                 file.WriteLine();
@@ -255,6 +263,52 @@ namespace SW2URDF.URDFExport
                 {
                     file.WriteLine("  - " + name);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Generates a minimal default RViz2 configuration file (urdf.rviz).
+        ///
+        /// Provides sensible defaults for visualizing the robot model:
+        ///   - Fixed frame: base_link
+        ///   - Grid display enabled
+        ///   - RobotModel display enabled with default URDF path
+        ///
+        /// Users can customize the configuration by editing this file
+        /// or saving a new configuration from within RViz2.
+        /// </summary>
+        public void CreateDefaultRvizConfig()
+        {
+            using (StreamWriter file = new StreamWriter(WindowsRvizConfig))
+            {
+                file.WriteLine("Panels:");
+                file.WriteLine("  - Class: rviz_common/Displays");
+                file.WriteLine("    Name: Displays");
+                file.WriteLine("Visualization Manager:");
+                file.WriteLine("  Class: \"\"");
+                file.WriteLine("  Displays:");
+                file.WriteLine("    - Class: rviz_default_plugins/Grid");
+                file.WriteLine("      Name: Grid");
+                file.WriteLine("    - Class: rviz_default_plugins/RobotModel");
+                file.WriteLine("      Name: RobotModel");
+                file.WriteLine("      Description Source: Topic");
+                file.WriteLine("      Description Topic:");
+                file.WriteLine("        Value: /robot_description");
+                file.WriteLine("      Enabled: true");
+                file.WriteLine("      Visual Enabled: true");
+                file.WriteLine("  Enabled: true");
+                file.WriteLine("  Global Options:");
+                file.WriteLine("    Fixed Frame: base_link");
+                file.WriteLine("  Tools:");
+                file.WriteLine("    - Class: rviz_default_plugins/MoveCamera");
+                file.WriteLine("    - Class: rviz_default_plugins/Select");
+                file.WriteLine("    - Class: rviz_default_plugins/Interact");
+                file.WriteLine("  Value: true");
+                file.WriteLine("  Views:");
+                file.WriteLine("    Current:");
+                file.WriteLine("      Class: rviz_default_plugins/Orbit");
+                file.WriteLine("      Name: Current View");
+                file.WriteLine("      Target Frame: base_link");
             }
         }
 

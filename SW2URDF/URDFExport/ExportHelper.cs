@@ -185,6 +185,10 @@ namespace SW2URDF.URDFExport
             logger.Info("Creating joint names config at " + package.WindowsConfigYAML);
             package.CreateConfigYAML(URDFRobot.GetJointNames(false));
 
+            // Generate default RViz2 configuration file
+            logger.Info("Creating default RViz config at " + package.WindowsRvizConfig);
+            package.CreateDefaultRvizConfig();
+
             // Generate package.xml manifest (ROS2 format 3)
             logger.Info("Creating package.xml at " + windowsPackageXMLFileName);
             PackageXMLWriter packageXMLWriter = new PackageXMLWriter(windowsPackageXMLFileName);
@@ -264,25 +268,7 @@ namespace SW2URDF.URDFExport
 
         public List<string> GetJointNames()
         {
-            List<string> jointNames = new List<string>();
-
-            Queue<Link> queue = new Queue<Link>();
-            queue.Enqueue(URDFRobot.BaseLink);
-            while (queue.Count > 0)
-            {
-                Link current = queue.Dequeue();
-                if (current.Parent != null)
-                {
-                    jointNames.Add(current.Joint.Name);
-                }
-
-                foreach (Link child in current.Children)
-                {
-                    queue.Enqueue(child);
-                }
-            }
-
-            return jointNames;
+            return new List<string>(URDFRobot.GetJointNames(true));
         }
 
         //Recursive method for exporting each link (and writing it to the URDF)
