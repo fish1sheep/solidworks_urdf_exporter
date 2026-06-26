@@ -46,34 +46,25 @@ ArchitecturesInstallIn64BitMode=x64compatible
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-; 主插件 DLL 和 COM 类型库
-Source: x64\Release\SW2URDF.dll;    DestDir: {app}; Flags: ignoreversion; Check: IsWin64
+; 主插件 DLL 和所有依赖（RegAsm 注册时需要全部依赖，缺一不可）
+Source: x64\Release\*.dll;    DestDir: {app}; Flags: ignoreversion; Check: IsWin64
 Source: x64\Release\SW2URDF.tlb;    DestDir: {app}; Flags: ignoreversion; Check: IsWin64
 Source: x64\Release\SW2URDF.png;    DestDir: {app}; Flags: ignoreversion; Check: IsWin64
 
-; SolidWorks 工具库（SW2URDF 依赖）
-Source: x64\Release\solidworkstools.dll; DestDir: {app}; Flags: ignoreversion; Check: IsWin64
-
-; 日志库
-Source: x64\Release\log4net.dll;     DestDir: {app}; Flags: ignoreversion; Check: IsWin64
-
-; 数学运算库（坐标变换、惯性计算）
-Source: x64\Release\MathNet.Numerics.dll; DestDir: {app}; Flags: ignoreversion; Check: IsWin64
-
-; CSV 解析库（CSV 导入导出）
-Source: x64\Release\CsvHelper.dll;   DestDir: {app}; Flags: ignoreversion; Check: IsWin64
-
-; CsvHelper 的传递依赖
-Source: x64\Release\System.Runtime.CompilerServices.Unsafe.dll; DestDir: {app}; Flags: ignoreversion; Check: IsWin64
-Source: x64\Release\System.Threading.Tasks.Extensions.dll;       DestDir: {app}; Flags: ignoreversion; Check: IsWin64
+; 图标文件
+Source: x64\Release\images\*; DestDir: {app}\images; Flags: ignoreversion; Check: IsWin64
 
 [Run]                                                        
-Filename: "{reg:HKLM64\SOFTWARE\Microsoft\.NETFramework,InstallRoot}\v4.0.30319\RegAsm.exe"; Parameters: """{app}\SW2URDF.dll"" ""/codebase"""; StatusMsg: Registering controls ...; Check: IsWin64; Languages:
+Filename: "{reg:HKLM64\SOFTWARE\Microsoft\.NETFramework,InstallRoot}\v4.0.30319\RegAsm.exe"; Parameters: """{app}\SW2URDF.dll"" ""/codebase"""; StatusMsg: Registering controls ...; Check: IsWin64
 
 
 [Registry]
+; SolidWorks 插件注册信息（安装时不创建，卸载时删除）
 Root: HKLM64; Subkey: "SOFTWARE\SolidWorks\Addins\65c9fc17-6a74-45a3-8f84-55185900275d";        ValueType: none; ValueName: ""; Flags: dontcreatekey deletekey uninsdeletevalue; Check: IsWin64
 Root: HKCU64; Subkey: "Software\SolidWorks\AddInsStartup\65c9fc17-6a74-45a3-8f84-55185900275d"; ValueType: none; ValueName: ""; Flags: dontcreatekey deletekey uninsdeletevalue; Check: IsWin64
 
 [UninstallRun]
-Filename: "{reg:HKLM64\SOFTWARE\Microsoft\.NETFramework,InstallRoot}\v4.0.30319\RegAsm.exe"; Parameters:  """{app}\SW2URDF.dll"" ""/unregister"""; StatusMsg: Unregistering controls ...; Check: IsWin64; Languages: ; RunOnceId: "UnregisterSW2URDF"
+; 正常 .NET COM 反注册
+Filename: "{reg:HKLM64\SOFTWARE\Microsoft\.NETFramework,InstallRoot}\v4.0.30319\RegAsm.exe"; Parameters:  """{app}\SW2URDF.dll"" ""/unregister"""; StatusMsg: Unregistering controls ...; Check: IsWin64; RunOnceId: "UnregisterSW2URDF"
+; 强制清除 COM CLSID 注册表残留（即使 RegAsm 失败也能清理干净）
+Filename: "reg.exe"; Parameters: "delete ""HKLM\SOFTWARE\Classes\CLSID\{{65c9fc17-6a74-45a3-8f84-55185900275d}}"" /f"; StatusMsg: Cleaning up COM registration...; Check: IsWin64; RunOnceId: "DeleteCLSID"
