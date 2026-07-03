@@ -64,7 +64,7 @@ namespace SW2URDF.UI
             return item;
         }
 
-        private bool IsValidDrop(TreeView tree, TreeViewItem package, DragEventArgs e)
+        internal bool IsValidDrop(TreeView tree, TreeViewItem package, DragEventArgs e)
         {
             if (package == null)
             {
@@ -85,7 +85,7 @@ namespace SW2URDF.UI
             return true;
         }
 
-        private bool IsValidDrop(TreeViewItem target, DragEventArgs e)
+        internal bool IsValidDrop(TreeViewItem target, DragEventArgs e)
         {
             if (!(e.Data.GetData(typeof(TreeViewItem)) is TreeViewItem package))
             {
@@ -106,23 +106,10 @@ namespace SW2URDF.UI
         }
 
         /// <summary>
-        /// A drag and drop feature is not simple to implement for a tree. There are several considerations about how the
-        /// tree gets reordered when you drag a tree node to another tree node. Part of the difficulty is that there
-        /// can be only one root node, so it has to be predictable which one that will be.
-        ///
-        /// This logic has two cases, either you're moving the node down the tree to one of its direct descendents,
-        /// or you are adding it to another unrelated node.
-        ///
-        /// For the first case, the package node and all its descendents up to the target will be brought with it, and
-        /// attached to the target. The target will then be attached to the package's parent.
-        ///
-        /// For the second case, it's the package is simply removed from its parent and attached to the target. With all
-        /// the descendents brought with it.
+        /// Provides a public static version of ProcessDragDropOnItem for use by TreeMergeWPF
+        /// and other consumers that need the logic without the TreeModified event.
         /// </summary>
-        /// <param name="treeView"></param>
-        /// <param name="target"></param>
-        /// <param name="package"></param>
-        private void ProcessDragDropOnItem(TreeViewItem target, TreeViewItem package, int position = -1)
+        public static void MoveTreeItem(TreeViewItem target, TreeViewItem package, int position = -1)
         {
             // The parent of the package could be either a TreeView or TreeViewItem
             ItemsControl packageParent = (ItemsControl)package.Parent;
@@ -133,9 +120,9 @@ namespace SW2URDF.UI
             {
                 // You are now creating a hole in the tree, to resolve, we'll promote
                 // the target to a child of the package's parent, and then add the package
-                // to the target's children. We already know the target's parent is a TreeViewItem
-                // so the cast is fine
-                TreeViewItem targetParent = (TreeViewItem)target.Parent;
+                // to the target's children. The target's parent could be a TreeViewItem
+                // or the root TreeView itself.
+                ItemsControl targetParent = (ItemsControl)target.Parent;
 
                 targetParent.Items.Remove(target);
                 packageParent.Items.Add(target);
@@ -158,11 +145,32 @@ namespace SW2URDF.UI
             {
                 target.Items.Insert(position, package);
             }
+        }
 
+        /// <summary>
+        /// A drag and drop feature is not simple to implement for a tree. There are several considerations about how the
+        /// tree gets reordered when you drag a tree node to another tree node. Part of the difficulty is that there
+        /// can be only one root node, so it has to be predictable which one that will be.
+        ///
+        /// This logic has two cases, either you're moving the node down the tree to one of its direct descendents,
+        /// or you are adding it to another unrelated node.
+        ///
+        /// For the first case, the package node and all its descendents up to the target will be brought with it, and
+        /// attached to the target. The target will then be attached to the package's parent.
+        ///
+        /// For the second case, it's the package is simply removed from its parent and attached to the target. With all
+        /// the descendents brought with it.
+        /// </summary>
+        /// <param name="target"></param>
+        /// <param name="package"></param>
+        /// <param name="position"></param>
+        private void ProcessDragDropOnItem(TreeViewItem target, TreeViewItem package, int position = -1)
+        {
+            MoveTreeItem(target, package, position);
             TreeModified(this, new TreeModifiedEventArgs { Tree = this });
         }
 
-        private static bool IsPointToSideOfElement(TreeViewItem item, Point pointOnElement)
+        public static bool IsPointToSideOfElement(TreeViewItem item, Point pointOnElement)
         {
             pointOnElement.X = 1;
             IInputElement result = item.InputHitTest(pointOnElement);
@@ -176,7 +184,7 @@ namespace SW2URDF.UI
         /// <param name="items"></param>
         /// <param name="e"></param>
         /// <returns></returns>
-        private static TreeViewItem GetItemToSideOfPoint(URDFTreeView tree, DragEventArgs e)
+        public static TreeViewItem GetItemToSideOfPoint(URDFTreeView tree, DragEventArgs e)
         {
             List<TreeViewItem> flattened = tree.Flatten();
 

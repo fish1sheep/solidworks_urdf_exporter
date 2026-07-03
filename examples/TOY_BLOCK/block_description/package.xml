@@ -1,12 +1,12 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypesets=""?>
 <package format="3">
-  <name>ORIGINAL_3_DOF_ARM_description</name>
+  <name>block_description</name>
   <version>1.0.0</version>
   <description>
-    <p>URDF Description package for ORIGINAL_3_DOF_ARM_description</p>
+    <p>URDF Description package for block_description</p>
     <p>This package contains configuration data, 3D models and launch files
-for ORIGINAL_3_DOF_ARM_description robot</p>
+for block_description robot</p>
   </description>
   <author>TODO</author>
   <maintainer email="TODO@email.com">TODO</maintainer>
@@ -15,7 +15,6 @@ for ORIGINAL_3_DOF_ARM_description robot</p>
   <exec_depend>ros2launch</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>rviz2</exec_depend>
-  <exec_depend>joint_state_publisher_gui</exec_depend>
   <export>
     <build_type>ament_cmake</build_type>
   </export>

@@ -33,46 +33,34 @@ namespace SW2URDF.URDF
 
         public void WriteURDF(XmlWriter writer)
         {
-            string valueString = "";
-            if (Value.GetType() == typeof(double[]))
+            if (Value == null)
             {
-                double[] valueArray = (double[])Value;
-                foreach (double d in valueArray)
+                if (IsRequired)
                 {
-                    valueString +=
-                        d.ToString(URDFNumberFormat) + " ";
+                    throw new URDFAttributeException("Required attribute " + AttributeType + " has null value");
                 }
-                valueString = valueString.Trim();
+                return;
             }
-            else if (Value.GetType() == typeof(double))
+
+            string valueString = Value switch
             {
-                valueString =
-                    ((Double)Value).ToString(URDFNumberFormat);
-            }
-            else if (Value.GetType() == typeof(string))
-            {
-                valueString = (string)Value;
-            }
-            else if (Value != null)
-            {
-                throw new Exception("Unhandled object type in write attribute");
-            }
-            if (IsRequired && Value == null)
-            {
-                throw new Exception("Required attribute " + AttributeType + " has null value");
-            }
+                double[] arr => string.Join(" ", Array.ConvertAll(arr, d => d.ToString(URDFNumberFormat))),
+                double d => d.ToString(URDFNumberFormat),
+                string s => s,
+                _ => throw new URDFAttributeException("Unhandled object type in write attribute")
+            };
             if (String.IsNullOrWhiteSpace(AttributeType))
             {
-                throw new Exception("No type specified");
+                throw new URDFAttributeException("No type specified");
             }
-            if (Value != null)
-            {
-                writer.WriteAttributeString(AttributeType, valueString);
-            }
+            writer.WriteAttributeString(AttributeType, valueString);
         }
 
         public void AppendToCSVDictionary(List<string> context, OrderedDictionary dictionary)
         {
+            if (Value == null)
+                return;
+
             if (Value.GetType() == typeof(double[]))
             {
                 double[] values = (double[])Value;
@@ -113,7 +101,7 @@ namespace SW2URDF.URDF
                 {
                     if (!Double.TryParse(valueFields[i], out resultDouble))
                     {
-                        throw new Exception("Parsing failed for CSV field " + valueStr);
+                        throw new URDFCSVParseException("Parsing failed for CSV field " + valueStr);
                     }
                     arry[i] = resultDouble;
                 }
@@ -147,9 +135,8 @@ namespace SW2URDF.URDF
         public string GetTextFromDoubleValue(string format = "G")
         {
             string result = "";
-            if (Value != null && Value.GetType() == typeof(double))
+            if (Value is double dValue)
             {
-                double dValue = (double)Value;
                 result = dValue.ToString(format, URDFNumberFormat);
             }
             return result;

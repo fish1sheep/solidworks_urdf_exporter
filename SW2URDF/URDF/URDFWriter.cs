@@ -1,10 +1,11 @@
-﻿using System.Text;
+﻿using System;
+using System.Text;
 using System.Xml;
 
 namespace SW2URDF.URDF
 {
     //Initiates the XMLWriter and its necessary settings
-    public class URDFWriter
+    public class URDFWriter : IDisposable
     {
         public XmlWriter writer;
 
@@ -17,6 +18,12 @@ namespace SW2URDF.URDF
                 NewLineOnAttributes = true,
             };
             writer = XmlWriter.Create(savePath, settings);
+        }
+
+        public void Dispose()
+        {
+            writer?.Close();
+            writer?.Dispose();
         }
     }
 }

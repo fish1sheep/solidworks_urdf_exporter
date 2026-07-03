@@ -34,13 +34,12 @@ namespace SW2URDF.URDFExport
 {
     public partial class ExportPropertyManager : PropertyManagerPage2Handler9
     {
-        public static readonly double ConfigurationVersion = 1.3;
-        public static readonly double SoapMinVersion = 1.3;
+        public static readonly double ConfigurationVersion = 1.4;
+        public static readonly double SoapMinVersion = 1.4;
 
         public void SaveConfigTree(ModelDoc2 model, LinkNode BaseNode, bool warnUser)
         {
-            CommonSwOperations.RetrieveSWComponentPIDs(model, BaseNode);
-            ConfigurationSerialization.SaveConfigTreeXML(swApp, model, BaseNode, warnUser);
+            ConfigurationSerialization.SaveConfigTree(swApp, model, BaseNode, warnUser);
         }
 
         //As nodes are created and destroyed, this menu gets called a lot. It basically just
@@ -187,7 +186,9 @@ namespace SW2URDF.URDFExport
             }
             foreach (LinkNode node in nodeToCheck.Nodes)
             {
-                return FindNextLinkToVisit(node);
+                LinkNode result = FindNextLinkToVisit(node);
+                if (result != null)
+                    return result;
             }
             return null;
         }
@@ -262,12 +263,12 @@ namespace SW2URDF.URDFExport
 
         private void CheckModelDocsExist(LinkNode node, List<string> problemComponents)
         {
-            foreach (Component2 component in node.Link.SWComponents)
+            foreach (IComponentHandle handle in node.Link.SWComponents)
             {
-                ModelDoc2 doc = component.GetModelDoc2();
-                if (doc == null)
+                Component2 component = (handle as ComponentHandle)?.GetCOMObject(ActiveSWModel);
+                if (component == null)
                 {
-                    problemComponents.Add(component.Name2);
+                    problemComponents.Add(handle.Name ?? "(null name)");
                 }
             }
 
@@ -328,7 +329,7 @@ namespace SW2URDF.URDFExport
                     previouslySelectedNode.Link.Joint.CoordinateSystemName =
                         PMComboBoxGlobalCoordsys.get_ItemText(-1);
                 }
-                CommonSwOperations.GetSelectedComponents(
+                CommonSwOperations.GetSelectedComponentHandles(
                     ActiveSWModel, previouslySelectedNode.Link.SWComponents, PMSelection.Mark);
             }
         }
@@ -343,7 +344,7 @@ namespace SW2URDF.URDFExport
                 node.Link.Name = "base_link";
                 node.Link.Joint.AxisName = "";
                 node.Link.Joint.CoordinateSystemName = "Automatically Generate";
-                node.Link.SWComponents = new List<Component2>();
+                node.Link.SWComponents = new List<IComponentHandle>();
                 node.IsBaseNode = true;
                 node.IsIncomplete = true;
             }
@@ -354,7 +355,7 @@ namespace SW2URDF.URDFExport
                 node.Link.Joint.AxisName = "Automatically Generate";
                 node.Link.Joint.CoordinateSystemName = "Automatically Generate";
                 node.Link.Joint.Type = "Automatically Detect";
-                node.Link.SWComponents = new List<Component2>();
+                node.Link.SWComponents = new List<IComponentHandle>();
                 node.IsBaseNode = false;
                 node.IsIncomplete = true;
             }
@@ -681,6 +682,8 @@ namespace SW2URDF.URDFExport
 
             //Finds the conflicts of the currentNode with all the other nodes
             CheckIfLinkNamesAreUnique(basenode, currentNode.Link.Name, conflict);
+            if (conflict.Count == 0)
+                return;
             bool alreadyExists = false;
             foreach (List<string> existingConflict in conflicts)
             {

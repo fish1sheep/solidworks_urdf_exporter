@@ -30,7 +30,7 @@ namespace SW2URDF.UI
 {
     public partial class PartExportForm : Form
     {
-        public ExportHelper Exporter;
+        public IExportHelper Exporter;
 
         public PartExportForm(SldWorks iSwApp)
         {

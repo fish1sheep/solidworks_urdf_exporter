@@ -10,7 +10,7 @@ using System.Xml;
 
 namespace SW2URDF.URDF
 {
-    // Base class of each URDFElement. The goal is to minimize the amount of code in the derived classes;s
+    // Base class of each URDFElement. The goal is to minimize the amount of code in the derived classes;
     [DataContract(IsReference = true, Namespace = "http://schemas.datacontract.org/2004/07/SW2URDF")]
     [KnownType("GetKnownTypes")]
     public class URDFElement : IExtensibleDataObject
@@ -59,7 +59,7 @@ namespace SW2URDF.URDF
         {
             if (!AreRequiredFieldsSatisfied())
             {
-                throw new Exception("The required fields of the element " + ElementName + " have not been satisfied");
+                throw new URDFElementValidationException("The required fields of the element " + ElementName + " have not been satisfied");
             }
 
             if (!ElementContainsData())
@@ -187,7 +187,7 @@ namespace SW2URDF.URDF
         {
             if (externalElement.GetType() != GetType())
             {
-                throw new Exception("URDFElements need to be the same type to set the internal values");
+                throw new URDFException("URDFElements need to be the same type to set the internal values");
             }
 
             foreach (Tuple<URDFAttribute, URDFAttribute> pair in

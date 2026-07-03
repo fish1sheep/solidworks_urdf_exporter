@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "SolidWorks To URDF"
-#define MyAppVersion "2026 v1.0.5"
+#define MyAppVersion "2026 v1.1.0 dev"
 #define MyAppPublisher "fish1sheep"
 #define MyAppURL "http://wiki.ros.org/sw_urdf_exporter"
 
@@ -24,7 +24,7 @@ AppName={#MyAppName}
 WizardStyle=modern
 AppVersion={#CommitVersion}
 VersionInfoVersion={#BuildVersion}
-VersionInfoCopyright=2019
+VersionInfoCopyright=2019-2026
 VersionInfoProductName={#MyAppName}
 ;AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -35,7 +35,7 @@ CreateAppDir=yes
 OutputBaseFilename=sw2urdfSetup
 ;OutputBaseFilename={#SetupBaseName + AppVersionFile}
 Compression=lzma                                                        
-DefaultDirName="C:\Program Files\SolidWorks Corp\SolidWorks\URDFExporter"
+DefaultDirName="{code:GetDefaultInstallDir}"
 SolidCompression=no
 PrivilegesRequired=admin
 OutputDir=..\..\INSTALL\OUTPUT
@@ -91,3 +91,53 @@ Root: HKCU64; Subkey: "Software\SolidWorks\AddInsStartup\65c9fc17-6a74-45a3-8f84
 Filename: "{reg:HKLM64\SOFTWARE\Microsoft\.NETFramework,InstallRoot}\v4.0.30319\RegAsm.exe"; Parameters:  """{app}\SW2URDF.dll"" ""/unregister"""; StatusMsg: "{cm:StatusUnregistering}"; Check: IsWin64; RunOnceId: "UnregisterSW2URDF"
 ; 强制清除 COM CLSID 注册表残留（即使 RegAsm 失败也能清理干净）
 Filename: "reg.exe"; Parameters: "delete ""HKLM\SOFTWARE\Classes\CLSID\{{65c9fc17-6a74-45a3-8f84-55185900275d}}"" /f"; StatusMsg: "{cm:StatusCleanupCOM}"; Check: IsWin64; RunOnceId: "DeleteCLSID"
+
+[Code]
+	function GetSolidWorksInstallPath: string;
+	var
+	  InstallPath: string;
+	begin
+	  // Try multiple possible SW versions (2021 through 2026)
+	  if RegQueryStringValue(HKLM64, 'SOFTWARE\SolidWorks\Setup\SolidWorks 2026', 'Install Folder', InstallPath) or
+	     RegQueryStringValue(HKLM64, 'SOFTWARE\SolidWorks\Setup\SolidWorks 2025', 'Install Folder', InstallPath) or
+	     RegQueryStringValue(HKLM64, 'SOFTWARE\SolidWorks\Setup\SolidWorks 2024', 'Install Folder', InstallPath) or
+	     RegQueryStringValue(HKLM64, 'SOFTWARE\SolidWorks\Setup\SolidWorks 2023', 'Install Folder', InstallPath) or
+	     RegQueryStringValue(HKLM64, 'SOFTWARE\SolidWorks\Setup\SolidWorks 2022', 'Install Folder', InstallPath) or
+	     RegQueryStringValue(HKLM64, 'SOFTWARE\SolidWorks\Setup\SolidWorks 2021', 'Install Folder', InstallPath) or
+	     RegQueryStringValue(HKLM64, 'SOFTWARE\WOW6432Node\SolidWorks\Setup\SolidWorks 2026', 'Install Folder', InstallPath) or
+	     RegQueryStringValue(HKLM64, 'SOFTWARE\WOW6432Node\SolidWorks\Setup\SolidWorks 2025', 'Install Folder', InstallPath) or
+	     RegQueryStringValue(HKLM64, 'SOFTWARE\WOW6432Node\SolidWorks\Setup\SolidWorks 2024', 'Install Folder', InstallPath) or
+	     RegQueryStringValue(HKLM64, 'SOFTWARE\WOW6432Node\SolidWorks\Setup\SolidWorks 2023', 'Install Folder', InstallPath) or
+	     RegQueryStringValue(HKLM64, 'SOFTWARE\WOW6432Node\SolidWorks\Setup\SolidWorks 2022', 'Install Folder', InstallPath) or
+	     RegQueryStringValue(HKLM64, 'SOFTWARE\WOW6432Node\SolidWorks\Setup\SolidWorks 2021', 'Install Folder', InstallPath) then
+  begin
+    Result := InstallPath;
+  end
+  else
+  begin
+    // Fallback: try the general SolidWorks setup key
+    if RegQueryStringValue(HKLM64, 'SOFTWARE\SolidWorks\Setup', 'Install Folder', InstallPath) then
+    begin
+      Result := InstallPath;
+    end
+    else
+    begin
+      // Last resort fallback
+      Result := 'C:\Program Files\SolidWorks Corp\SolidWorks';
+    end;
+  end;
+end;
+
+function GetDefaultInstallDir(Param: string): string;
+begin
+  Result := GetSolidWorksInstallPath;
+  if Trim(Result) <> '' then
+  begin
+    // Append URDFExporter subdirectory
+    Result := AddBackslash(Result) + 'URDFExporter';
+  end
+  else
+  begin
+    Result := 'C:\Program Files\SolidWorks Corp\SolidWorks\URDFExporter';
+  end;
+end;

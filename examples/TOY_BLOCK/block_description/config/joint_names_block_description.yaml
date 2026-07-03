@@ -2,7 +2,3 @@
 # Can be used for controller configuration or joint ordering reference
 
 joint_names:
-  - ''
-  - joint1
-  - joint2
-  - joint3

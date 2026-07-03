@@ -41,14 +41,14 @@ namespace SW2URDF.URDFExport
     // Many of the methods are overloaded, but seek to reduce repeated code as much as possible
     // (i.e. the overloaded methods call eachother).
     // These methods are used by the PartExportForm, the AssemblyExportForm and the PropertyManager Page
-    public partial class ExportHelper
+    public partial class ExportHelper : IExportHelper
     {
         #region class variables
 
         private static readonly log4net.ILog logger = Logger.GetLogger();
 
         [XmlIgnore]
-        public ISldWorks iSwApp = null;
+        public ISldWorks iSwApp { get; set; } = null;
 
         [XmlIgnore]
         private bool mBinary;
@@ -64,7 +64,7 @@ namespace SW2URDF.URDFExport
         private UserProgressBar progressBar;
 
         [XmlIgnore]
-        public ModelDoc2 ActiveSWModel;
+        public ModelDoc2 ActiveSWModel { get; set; }
 
         [XmlIgnore]
         public MathUtility swMath;
@@ -82,7 +82,7 @@ namespace SW2URDF.URDFExport
         public string SavePath
         { get; set; }
 
-        public readonly List<Link> Links;
+        public List<Link> Links { get; } = new List<Link>();
 
         private readonly List<string> ReferenceCoordinateSystemNames;
         private readonly List<string> ReferenceAxesNames;
@@ -169,7 +169,7 @@ namespace SW2URDF.URDFExport
             progressBar.Start(0, progressBarBound, "Creating package directories");
 
             // Create package directory structure
-            logger.Info("Creating package directories with name " + PackageName + " and save path " + SavePath);
+            logger.Info($"Creating package directories with name {PackageName} and save path {SavePath}");
             URDFPackage package = new URDFPackage(PackageName, SavePath);
             package.CreateDirectories();
             URDFRobot.Name = PackageName;
@@ -178,26 +178,28 @@ namespace SW2URDF.URDFExport
             string windowsPackageXMLFileName = package.WindowsPackageDirectory + "package.xml";
 
             // Generate CMakeLists.txt (ament_cmake format)
-            logger.Info("Creating CMakeLists.txt at " + package.WindowsCMakeLists);
+            logger.Info($"Creating CMakeLists.txt at {package.WindowsCMakeLists}");
             package.CreateCMakeLists();
 
             // Generate joint name configuration YAML (ROS2-neutral format)
-            logger.Info("Creating joint names config at " + package.WindowsConfigYAML);
+            logger.Info($"Creating joint names config at {package.WindowsConfigYAML}");
             package.CreateConfigYAML(URDFRobot.GetJointNames(false));
 
             // Generate default RViz2 configuration file
-            logger.Info("Creating default RViz config at " + package.WindowsRvizConfig);
+            logger.Info($"Creating default RViz config at {package.WindowsRvizConfig}");
             package.CreateDefaultRvizConfig();
 
             // Generate package.xml manifest (ROS2 format 3)
-            logger.Info("Creating package.xml at " + windowsPackageXMLFileName);
-            PackageXMLWriter packageXMLWriter = new PackageXMLWriter(windowsPackageXMLFileName);
-            PackageXML packageXML = new PackageXML(PackageName);
-            packageXML.WriteElement(packageXMLWriter);
+            logger.Info($"Creating package.xml at {windowsPackageXMLFileName}");
+            using (PackageXMLWriter packageXMLWriter = new PackageXMLWriter(windowsPackageXMLFileName))
+            {
+                PackageXML packageXML = new PackageXML(PackageName);
+                packageXML.WriteElement(packageXMLWriter);
+            }
 
             // Generate display.launch.py (ROS2 Python launch file)
             Rviz rviz = new Rviz(PackageName, URDFRobot.Name + ".urdf");
-            logger.Info("Creating RVIZ launch file in " + package.WindowsLaunchDirectory);
+            logger.Info($"Creating RVIZ launch file in {package.WindowsLaunchDirectory}");
             rviz.WriteFiles(package.WindowsLaunchDirectory);
 
             // Generate Gazebo launch file (currently a placeholder)
@@ -205,26 +207,44 @@ namespace SW2URDF.URDFExport
             logger.Info("Creating Gazebo launch file in " + package.WindowsLaunchDirectory);
             gazebo.WriteFile(package.WindowsLaunchDirectory);
 
-            // Save user's STL preferences, then apply export-required settings
-            logger.Info("Saving existing STL preferences");
-            SaveUserPreferences();
-
-            logger.Info("Modifying STL preferences");
-            SetSTLExportPreferences();
-
-            // Hide all components, then export mesh files for each link individually
-            AssemblyDoc assyDoc = (AssemblyDoc)ActiveSWModel;
-            List<string> hiddenComponents = CommonSwOperations.FindHiddenComponents(assyDoc.GetComponents(false));
-            logger.Info("Found " + hiddenComponents.Count + " hidden components " + String.Join(", ", hiddenComponents));
-            logger.Info("Hiding all components");
-            ActiveSWModel.Extension.SelectAll();
-            ActiveSWModel.HideComponent2();
-
             bool success = false;
+            bool preferencesSaved = false;
+            List<string> hiddenComponents = null;
             try
             {
+                // Save user's STL preferences, then apply export-required settings
+                logger.Info("Saving existing STL preferences");
+                SaveUserPreferences();
+                preferencesSaved = true;
+
+                logger.Info("Modifying STL preferences");
+                SetSTLExportPreferences();
+
+                // Hide all components, then export mesh files for each link individually
+                AssemblyDoc assyDoc = (AssemblyDoc)ActiveSWModel;
+                hiddenComponents = CommonSwOperations.FindHiddenComponents(assyDoc.GetComponents(false));
+                logger.Info("Found " + hiddenComponents.Count + " hidden components " + String.Join(", ", hiddenComponents));
+                logger.Info("Hiding all components");
+                ActiveSWModel.Extension.SelectAll();
+                ActiveSWModel.HideComponent2();
+
                 logger.Info("Beginning individual files export");
                 ExportFiles(URDFRobot.BaseLink, package, 0, exportSTL, meshFormat);
+
+                // Write the URDF model to XML file
+                logger.Info("Writing URDF file to " + windowsURDFFileName);
+                using (URDFWriter uWriter = new URDFWriter(windowsURDFFileName))
+                {
+                    URDFRobot.WriteURDF(uWriter.writer);
+                }
+
+                // Export CSV data file (for batch property editing)
+                ImportExport.WriteRobotToCSV(URDFRobot, windowsCSVFileName);
+
+                // Copy log file to the package directory
+                logger.Info("Copying log file");
+                CopyLogFile(package);
+
                 success = true;
             }
             catch (Exception e)
@@ -234,11 +254,20 @@ namespace SW2URDF.URDFExport
             finally
             {
                 // Restore component visibility (previously hidden components stay hidden)
-                logger.Info("Showing all components except previously hidden components");
-                CommonSwOperations.ShowAllComponents(ActiveSWModel, hiddenComponents);
+                if (ActiveSWModel != null && hiddenComponents != null)
+                {
+                    logger.Info("Showing all components except previously hidden components");
+                    CommonSwOperations.ShowAllComponents(ActiveSWModel, hiddenComponents);
+                }
 
-                logger.Info("Resetting STL preferences");
-                ResetUserPreferences();
+                // Always restore user's original STL preferences if they were saved
+                if (preferencesSaved)
+                {
+                    logger.Info("Resetting STL preferences");
+                    ResetUserPreferences();
+                }
+
+                progressBar.End();
             }
 
             if (!success)
@@ -247,23 +276,6 @@ namespace SW2URDF.URDFExport
                     "with the log file found at " + Logger.GetFileName());
                 return;
             }
-
-            // Write the URDF model to XML file
-            logger.Info("Writing URDF file to " + windowsURDFFileName);
-            URDFWriter uWriter = new URDFWriter(windowsURDFFileName);
-            URDFRobot.WriteURDF(uWriter.writer);
-
-            // Export CSV data file (for batch property editing)
-            ImportExport.WriteRobotToCSV(URDFRobot, windowsCSVFileName);
-
-            // Copy log file to the package directory
-            logger.Info("Copying log file");
-            CopyLogFile(package);
-
-            // Restore user's original STL preferences
-            logger.Info("Resetting STL preferences");
-            ResetUserPreferences();
-            progressBar.End();
         }
 
         public List<string> GetJointNames()
@@ -392,7 +404,7 @@ namespace SW2URDF.URDFExport
             {
                 if (link.SWMainComponent != null)
                 {
-                    linkModel = link.SWMainComponent.GetModelDoc2();
+                    linkModel = (link.SWMainComponent as ComponentHandle)?.GetCOMObject(ActiveSWModel)?.GetModelDoc2();
                 }
                 else
                 {
@@ -501,10 +513,12 @@ namespace SW2URDF.URDFExport
 
             // Create package.xml manifest (ROS2 format 3, not legacy manifest.xml)
             string windowsPackageXMLFileName = package.WindowsPackageDirectory + "package.xml";
-            logger.Info("Creating package.xml at " + windowsPackageXMLFileName);
-            PackageXMLWriter packageXMLWriter = new PackageXMLWriter(windowsPackageXMLFileName);
-            PackageXML packageXML = new PackageXML(URDFRobot.Name);
-            packageXML.WriteElement(packageXMLWriter);
+            logger.Info($"Creating package.xml at {windowsPackageXMLFileName}");
+            using (PackageXMLWriter packageXMLWriter = new PackageXMLWriter(windowsPackageXMLFileName))
+            {
+                PackageXML packageXML = new PackageXML(URDFRobot.Name);
+                packageXML.WriteElement(packageXMLWriter);
+            }
 
             // Save user's STL preferences, then apply export-required settings
             SaveUserPreferences();
@@ -522,18 +536,20 @@ namespace SW2URDF.URDFExport
             URDFRobot.BaseLink.Collision.Geometry.Mesh.Filename = meshFileName;
 
             // Copy texture file to the package's textures directory
-            URDFRobot.BaseLink.Visual.Material.Texture.Filename =
-                package.TexturesDirectory + Path.GetFileName(URDFRobot.BaseLink.Visual.Material.Texture.wFilename);
-            string textureSavePath =
-                package.WindowsTexturesDirectory + Path.GetFileName(URDFRobot.BaseLink.Visual.Material.Texture.wFilename);
             if (!String.IsNullOrWhiteSpace(URDFRobot.BaseLink.Visual.Material.Texture.wFilename))
             {
+                URDFRobot.BaseLink.Visual.Material.Texture.Filename =
+                    package.TexturesDirectory + Path.GetFileName(URDFRobot.BaseLink.Visual.Material.Texture.wFilename);
+                string textureSavePath =
+                    package.WindowsTexturesDirectory + Path.GetFileName(URDFRobot.BaseLink.Visual.Material.Texture.wFilename);
                 File.Copy(URDFRobot.BaseLink.Visual.Material.Texture.wFilename, textureSavePath, true);
             }
 
             // Write the URDF model to XML file
-            URDFWriter uWriter = new URDFWriter(windowsURDFFileName);
-            URDFRobot.WriteURDF(uWriter.writer);
+            using (URDFWriter uWriter = new URDFWriter(windowsURDFFileName))
+            {
+                URDFRobot.WriteURDF(uWriter.writer);
+            }
 
             ResetUserPreferences();
         }

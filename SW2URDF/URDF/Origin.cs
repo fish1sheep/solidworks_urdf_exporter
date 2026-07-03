@@ -16,7 +16,7 @@ namespace SW2URDF.URDF
 
         private double[] XYZ
         {
-            get => (double[])XYZAttribute.Value;
+            get => (double[])XYZAttribute.Value ?? new double[] { 0, 0, 0 };
             set => XYZAttribute.Value = value;
         }
 
@@ -27,7 +27,7 @@ namespace SW2URDF.URDF
 
         public void SetXYZ(double[] xyz)
         {
-            XYZ = xyz;
+            XYZ = (double[])xyz.Clone();
         }
 
         public double X
@@ -50,7 +50,7 @@ namespace SW2URDF.URDF
 
         private double[] RPY
         {
-            get => (double[])RPYAttribute.Value;
+            get => (double[])RPYAttribute.Value ?? new double[] { 0, 0, 0 };
             set => RPYAttribute.Value = value;
         }
 
@@ -61,7 +61,7 @@ namespace SW2URDF.URDF
 
         public void SetRPY(double[] rpy)
         {
-            RPY = rpy;
+            RPY = (double[])rpy.Clone();
         }
 
         public double Roll

@@ -90,7 +90,8 @@ namespace SW2URDF.Utilities
         {
             if (point.Length != line.Length || point.Length != pointOnLine.Length)
             {
-                throw new Exception("Points and line vectors are not the same length");
+                throw new ArgumentException(
+                    $"{nameof(point)}, {nameof(line)}, and {nameof(pointOnLine)} must have the same length");
             }
 
             double denominator = 0;

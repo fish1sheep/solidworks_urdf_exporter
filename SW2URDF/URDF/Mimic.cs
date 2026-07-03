@@ -14,10 +14,7 @@ namespace SW2URDF.URDF
             get => (string)JointNameAttribute.Value;
             set
             {
-                if (value.GetType() == typeof(string))
-                {
-                    JointNameAttribute.Value = value;
-                }
+                JointNameAttribute.Value = value;
             }
         }
 
@@ -26,13 +23,10 @@ namespace SW2URDF.URDF
 
         public double Multiplier
         {
-            get => (double)MultiplierAttribute.Value;
+            get => MultiplierAttribute.Value as double? ?? 1.0;
             set
             {
-                if (value.GetType() == typeof(double))
-                {
-                    MultiplierAttribute.Value = value;
-                }
+                MultiplierAttribute.Value = value;
             }
         }
 
@@ -41,13 +35,10 @@ namespace SW2URDF.URDF
 
         public double Offset
         {
-            get => (double)OffsetAttribute.Value;
+            get => OffsetAttribute.Value as double? ?? 0.0;
             set
             {
-                if (value.GetType() == typeof(double))
-                {
-                    OffsetAttribute.Value = value;
-                }
+                OffsetAttribute.Value = value;
             }
         }
 

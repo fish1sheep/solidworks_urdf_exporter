@@ -1,14 +1,24 @@
-cmake_minimum_required(VERSION 2.8.3)
+# Auto-generated CMakeLists.txt — created by SolidWorks URDF Exporter
+
+cmake_minimum_required(VERSION 3.8)
 
 project(3_DOF_ARM_description)
 
-find_package(catkin REQUIRED)
+# Find the ament_cmake build system (required for ROS2)
+find_package(ament_cmake REQUIRED)
 
-catkin_package()
+# Install all resource directories into the package share directory
+# These files are located at runtime via the ament resource index
+install(
+  DIRECTORY config launch meshes urdf
+  DESTINATION share/${PROJECT_NAME}
+)
 
-find_package(roslaunch)
+# Enable lint checks in test builds (e.g. CI)
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  ament_lint_auto_find_test_dependencies()
+endif()
 
-foreach(dir config launch meshes urdf)
-	install(DIRECTORY ${dir}/
-		DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/${dir})
-endforeach(dir)
+# Declare as an ament package (required for ROS2)
+ament_package()

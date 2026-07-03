@@ -1,5 +1,6 @@
 using log4net;
 using SW2URDF.Utilities;
+using System;
 using System.Text;
 using System.Xml;
 
@@ -9,7 +10,7 @@ namespace SW2URDF.URDF
     /// XML writer for ROS2 package.xml manifest files.
     /// Configures UTF-8 encoding without BOM and indented formatting for readability.
     /// </summary>
-    public class PackageXMLWriter
+    public class PackageXMLWriter : IDisposable
     {
         public XmlWriter writer;
         private static readonly ILog logger = Logger.GetLogger();
@@ -23,6 +24,12 @@ namespace SW2URDF.URDF
             settings.NewLineOnAttributes = false;
             logger.Info("Creating package.xml at " + savePath);
             writer = XmlWriter.Create(savePath, settings);
+        }
+
+        public void Dispose()
+        {
+            writer?.Close();
+            writer?.Dispose();
         }
     }
 
@@ -98,7 +105,8 @@ namespace SW2URDF.URDF
                 new string[] {
                     "ros2launch", "robot_state_publisher", "rviz2", "joint_state_publisher_gui" });
 
-            author = new Author("TODO");
+            // Default author placeholder; set via SetAuthor() before writing to override.
+            author = new Author("ros2_user");
 
             license = new License("BSD");
 
@@ -147,7 +155,6 @@ namespace SW2URDF.URDF
 
             writer.WriteEndElement();
             writer.WriteEndDocument();
-            writer.Close();
         }
     }
 

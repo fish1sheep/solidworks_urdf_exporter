@@ -2,7 +2,7 @@
 
 cmake_minimum_required(VERSION 3.8)
 
-project(ORIGINAL_3_DOF_ARM_description)
+project(block_description)
 
 # Find the ament_cmake build system (required for ROS2)
 find_package(ament_cmake REQUIRED)

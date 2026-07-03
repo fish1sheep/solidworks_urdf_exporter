@@ -29,6 +29,8 @@ using SW2URDF.URDFExport;
 using SW2URDF.Utilities;
 using System;
 using System.Collections;
+using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
@@ -245,13 +247,15 @@ namespace SW2URDF.SW
         public void AddCommandMgr()
         {
             // Do not use AddMenuItem5 here despite the obselete warning, AddMenuItem5 doesn't work
+            string assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            string imagesDir = Path.Combine(assemblyDir, "images");
             string[] images = {
-                "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\URDFExporter\\images\\ros_logo_20x20.png",
-                "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\URDFExporter\\images\\ros_logo_32x32.png",
-                "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\URDFExporter\\images\\ros_logo_40x40.png",
-                "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\URDFExporter\\images\\ros_logo_64x64.png",
-                "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\URDFExporter\\images\\ros_logo_96x96.png",
-                "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS\\URDFExporter\\images\\ros_logo_128x128.png",
+                Path.Combine(imagesDir, "ros_logo_20x20.png"),
+                Path.Combine(imagesDir, "ros_logo_32x32.png"),
+                Path.Combine(imagesDir, "ros_logo_40x40.png"),
+                Path.Combine(imagesDir, "ros_logo_64x64.png"),
+                Path.Combine(imagesDir, "ros_logo_96x96.png"),
+                Path.Combine(imagesDir, "ros_logo_128x128.png"),
             };
             int ret = SwApp.AddMenuItem5((int)swDocumentTypes_e.swDocASSEMBLY, add_in_id_, "Export as URDF@&Tools",
                 -1, "AssemblyURDFExporter", "", "Export assembly as URDF file", images);
@@ -278,10 +282,10 @@ namespace SW2URDF.SW
         }
         public void RemoveCommandMgr()
         {
-            SwApp.RemoveMenu((int)swDocumentTypes_e.swDocASSEMBLY, "Export as URDF@&File", "");
-            logger.Info("Removing assembly export from file menu");
-            SwApp.RemoveMenu((int)swDocumentTypes_e.swDocPART, "Export as URDF@&File", "");
-            logger.Info("Removing part export from file menu");
+            SwApp.RemoveMenu((int)swDocumentTypes_e.swDocASSEMBLY, "Export as URDF@&Tools", "");
+            logger.Info("Removing assembly export from tools menu");
+            SwApp.RemoveMenu((int)swDocumentTypes_e.swDocPART, "Export as URDF@&Tools", "");
+            logger.Info("Removing part export from tools menu");
         }
 
         #endregion UI Methods
@@ -350,12 +354,12 @@ namespace SW2URDF.SW
         {
             logger.Info("Part export called");
             ModelDoc2 modeldoc = SwApp.ActiveDoc;
-            if ((modeldoc.Extension.NeedsRebuild2 == 0) ||
+            if ((modeldoc.Extension.NeedsRebuild2 == (int)swModelRebuildStatus_e.swModelRebuildStatus_FullyRebuilt) ||
                 MessageBox.Show("Save and rebuild document?",
                 "The SW to URDF exporter requires saving before continuing",
                 MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
-                if (modeldoc.Extension.NeedsRebuild2 != 0)
+                if (modeldoc.Extension.NeedsRebuild2 != (int)swModelRebuildStatus_e.swModelRebuildStatus_FullyRebuilt)
                 {
                     int options = (int)swSaveAsOptions_e.swSaveAsOptions_SaveReferenced |
                         (int)swSaveAsOptions_e.swSaveAsOptions_Silent;

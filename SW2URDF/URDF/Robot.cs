@@ -36,12 +36,11 @@ namespace SW2URDF.URDF
 
             writer.WriteComment(" This URDF was automatically created by SolidWorks to URDF Exporter! " +
                 "Originally created by Stephen Brawner (brawner@gmail.com) \r\n" +
-                string.Format("     Commit Version: {0}  Build Version: {1}\r\n", commitVersion, buildVersion) +
+                $"     Commit Version: {commitVersion}  Build Version: {buildVersion}\r\n" +
                 "     For more information, please see http://wiki.ros.org/sw_urdf_exporter ");
 
             base.WriteURDF(writer);
             writer.WriteEndDocument();
-            writer.Close();
         }
 
         public void SetBaseLink(Link link)

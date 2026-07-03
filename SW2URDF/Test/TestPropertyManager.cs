@@ -1,5 +1,4 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using SW2URDF.SW;
+﻿using SW2URDF.SW;
 using SW2URDF.URDFExport;
 using Xunit;
 
@@ -60,15 +59,15 @@ namespace SW2URDF.Test
         // TODO(SIMINT-164) pm.Show() crashes with drag drop 
         //[Theory]
         //[InlineData("3_DOF_ARM")]
-        public void TestPreviewExport(string modelName)
-        {
-            OpenSWDocument(modelName);
-            ExportPropertyManager pm = new ExportPropertyManager(SwApp);
-            pm.Show();
-
-            PrivateObject obj = new PrivateObject(pm);
-            obj.Invoke("ExportButtonPress");
-            Xunit.Assert.NotNull(obj.GetProperty("Exporter.URDFRobot"));
-        }
+        //public void TestPreviewExport(string modelName)
+        //{
+        //    OpenSWDocument(modelName);
+        //    ExportPropertyManager pm = new ExportPropertyManager(SwApp);
+        //    pm.Show();
+        //
+        //    PrivateObject obj = new PrivateObject(pm);
+        //    obj.Invoke("ExportButtonPress");
+        //    Xunit.Assert.NotNull(obj.GetProperty("Exporter.URDFRobot"));
+        //}
     }
 }

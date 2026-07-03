@@ -1,12 +1,13 @@
 using CsvHelper;
+using CsvHelper.Configuration;
 using log4net;
-using Microsoft.VisualBasic.FileIO;
 using SW2URDF.URDF;
 using SW2URDF.Utilities;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -32,7 +33,7 @@ namespace SW2URDF.URDFExport.CSV
             logger.Info("Writing CSV file " + filename);
             using (StreamWriter stream = new StreamWriter(filename))
             {
-                CsvWriter writer = new CsvWriter(stream);
+                CsvWriter writer = new CsvWriter(stream, CultureInfo.InvariantCulture);
                 WriteHeaderToCSV(writer);
                 WriteLinkToCSV(writer, robot.BaseLink);
             }
@@ -45,36 +46,41 @@ namespace SW2URDF.URDFExport.CSV
         /// <returns></returns>
         public static List<Link> LoadURDFRobotFromCSV(Stream stream)
         {
-            List<StringDictionary> loadedFields = new List<StringDictionary>();
-            using (TextFieldParser csvParser = new TextFieldParser(stream))
+            List<Dictionary<string, string>> loadedFields = new List<Dictionary<string, string>>();
+            using (StreamReader reader = new StreamReader(stream))
+            using (CsvReader csvReader = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
             {
-                csvParser.SetDelimiters(new string[] { "," });
+                HasHeaderRecord = true,
+                MissingFieldFound = null
+            }))
+            {
+                csvReader.Read();
+                csvReader.ReadHeader();
+                string[] headers = csvReader.HeaderRecord;
 
-                string[] headers = csvParser.ReadFields();
-                while (!csvParser.EndOfData)
+                while (csvReader.Read())
                 {
-                    string[] fields = csvParser.ReadFields();
-                    StringDictionary dictionary = new StringDictionary();
-                    
-                    int minArrayLength = Math.Min(fields.Length, headers.Length);
-                    if (fields.Length != headers.Length)
+                    Dictionary<string, string> dictionary = new Dictionary<string, string>();
+                    int minArrayLength = Math.Min(csvReader.ColumnCount, headers.Length);
+                    if (csvReader.ColumnCount != headers.Length)
                     {
-                        logger.Warn(string.Format(
-                            "The number of columns in the row do not match the number of columns in the header {0} != {1}",
-                            fields.Length, headers.Length));
+                        logger.Warn(
+                            $"The number of columns in the row do not match the number of columns in the header " +
+                            $"{csvReader.ColumnCount} != {headers.Length}");
                     }
                     for (int i = 0; i < minArrayLength; i++)
                     {
-                        if (!string.IsNullOrWhiteSpace(fields[i]))
+                        string field = csvReader.GetField(i);
+                        if (!string.IsNullOrWhiteSpace(field))
                         {
-                            dictionary[headers[i]] = fields[i];
+                            dictionary[headers[i]] = field;
                         }
                     }
                     loadedFields.Add(dictionary);
                 }
-
-                return loadedFields.Select(fields => BuildLinkFromData(fields)).ToList();
             }
+
+            return loadedFields.Select(fields => BuildLinkFromData(fields)).ToList();
         }
 
         #endregion Public Methods
@@ -148,9 +154,13 @@ namespace SW2URDF.URDFExport.CSV
             }
         }
 
-        private static Link BuildLinkFromData(StringDictionary dictionary)
+        private static Link BuildLinkFromData(Dictionary<string, string> dictionary)
         {
             StringDictionary contextDictionary = new StringDictionary();
+            foreach (KeyValuePair<string, string> entry in dictionary)
+            {
+                contextDictionary[entry.Key] = entry.Value;
+            }
             foreach (DictionaryEntry entry in ContextToColumns.Dictionary)
             {
                 string context = (string)entry.Key;

@@ -15,7 +15,7 @@ namespace SW2URDF.Test
 
         }
 
-        private static void AddLinkComponents(Link link, List<Component2> components)
+        private static void AddLinkComponents(Link link, List<IComponentHandle> components)
         {
             components.AddRange(link.SWComponents);
             foreach (Link child in link.Children)
@@ -38,10 +38,10 @@ namespace SW2URDF.Test
             Assert.False(abortProcess);
 
             Link baseLink = baseNode.RebuildLink();
-            List<Component2> componentsToSelect = new List<Component2>();
+            List<IComponentHandle> componentsToSelect = new List<IComponentHandle>();
             AddLinkComponents(baseLink, componentsToSelect);
             HashSet<string> componentsToSelectNames = 
-                new HashSet<string>(componentsToSelect.Select(component => component.Name2));
+                new HashSet<string>(componentsToSelect.GetNames());
 
             CommonSwOperations.SelectComponents(doc, baseLink, true);
             SelectionMgr selManager = doc.SelectionManager;
@@ -71,9 +71,9 @@ namespace SW2URDF.Test
             Assert.False(abortProcess);
 
             Link baseLink = baseNode.RebuildLink();
-            List<Component2> componentsToSelect = baseLink.SWComponents;
+            List<IComponentHandle> componentsToSelect = baseLink.SWComponents;
             HashSet<string> componentsToSelectNames = 
-                new HashSet<string>(componentsToSelect.Select(component => component.Name2));
+                new HashSet<string>(componentsToSelect.Select(component => component.Name));
 
             CommonSwOperations.SelectComponents(doc, componentsToSelect, true);
             SelectionMgr selManager = doc.SelectionManager;
@@ -106,9 +106,9 @@ namespace SW2URDF.Test
             Assert.False(abortProcess);
 
             Link baseLink = baseNode.RebuildLink();
-            List<Component2> componentsToSelect = baseLink.SWComponents;
+            List<IComponentHandle> componentsToSelect = baseLink.SWComponents;
             HashSet<string> componentsToSelectNames = 
-                new HashSet<string>(componentsToSelect.Select(component => component.Name2));
+                new HashSet<string>(componentsToSelect.Select(component => component.Name));
 
             CommonSwOperations.SelectComponents(doc, componentsToSelect, true);
             List<Component2> selectedComponents = new List<Component2>();
@@ -273,8 +273,9 @@ namespace SW2URDF.Test
             Assert.NotNull(component);
             LinkNode baseNode = ConfigurationSerialization.LoadBaseNodeFromModel(doc, out bool abortProcess);
             Assert.False(abortProcess);
-            baseNode.Link.SWMainComponent = component;
-            byte[] pid = CommonSwOperations.SaveSWComponent(doc, baseNode.Link.SWMainComponent);
+            baseNode.Link.SWMainComponent = new ComponentHandle(component);
+            byte[] pid = CommonSwOperations.SaveSWComponent(doc,
+                (baseNode.Link.SWMainComponent as ComponentHandle)?.GetCOMObject(doc));
             Assert.NotNull(pid);
             Assert.Equal(expected.Length, pid.Length);
             SwApp.CloseAllDocuments(true);
@@ -301,7 +302,7 @@ namespace SW2URDF.Test
             ModelDoc2 doc = OpenSWDocument(modelName);
             LinkNode baseNode = ConfigurationSerialization.LoadBaseNodeFromModel(doc, out bool abortProcess);
             Assert.False(abortProcess);
-            List<Component2> components = CommonSwOperations.LoadSWComponents(doc, baseNode.Link.SWComponentPIDs);
+            List<IComponentHandle> components = CommonSwOperations.LoadSWComponentHandles(doc, baseNode.Link.SWComponentPIDs);
             Assert.Equal(baseNode.Link.SWComponentPIDs.Count, components.Count);
 
             SwApp.CloseAllDocuments(true);

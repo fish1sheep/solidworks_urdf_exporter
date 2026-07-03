@@ -252,7 +252,7 @@ namespace SW2URDF.URDFExport
             bool bRet = swMass.AddBodies(bodies.ToArray());
             if (!bRet)
             {
-                throw new Exception("Failed to add bodies to swMass");
+                throw new MassPropertyException("Failed to add bodies to swMass");
             }
 
             return (double[])swMass.GetMomentOfInertia(
@@ -265,13 +265,13 @@ namespace SW2URDF.URDFExport
         /// </summary>
         /// <param name="bodies">Component Bodies with which to get the mass</param>
         /// <returns>Mass value of component bodies</returns>
-        private double GetCompomentsMass(List<Body2> bodies)
+        private double GetComponentsMass(List<Body2> bodies)
         {
             MassProperty swMass = ActiveSWModel.Extension.CreateMassProperty();
             bool bRet = swMass.AddBodies(bodies.ToArray());
             if (!bRet)
             {
-                throw new Exception("Failed to add bodies to swMass");
+                throw new MassPropertyException("Failed to add bodies to swMass");
             }
             return swMass.Mass;
         }
@@ -283,14 +283,14 @@ namespace SW2URDF.URDFExport
         /// <param name="bodies">Component bodies with which to get the mass</param>
         /// <param name="coordinateSystemTransform">Coordinate system take get the centor of mess with respect to</param>
         /// <returns>3D double array of center of mass</returns>
-        private double[] GetCompomentsCenterOfMass(List<Body2> bodies, MathTransform coordinateSystemTransform)
+        private double[] GetComponentsCenterOfMass(List<Body2> bodies, MathTransform coordinateSystemTransform)
         {
             MassProperty swMass = ActiveSWModel.Extension.CreateMassProperty();
             swMass.SetCoordinateSystem(coordinateSystemTransform);
             bool bRet = swMass.AddBodies(bodies.ToArray());
             if (!bRet)
             {
-                throw new Exception("Failed to add bodies to swMass");
+                throw new MassPropertyException("Failed to add bodies to swMass");
             }
             return swMass.CenterOfMass;
         }
@@ -299,19 +299,19 @@ namespace SW2URDF.URDFExport
         {
             // Get the SolidWorks MathTransform that corresponds to the child coordinate system
             MathTransform jointTransform = GetCoordinateSystemTransform(link.Joint.CoordinateSystemName);
-            List<Body2> bodies = GetBodies(link.SWComponents);
+            List<Body2> bodies = GetBodies(link.SWComponents.ToCOMList(ActiveSWModel));
 
             double[] moment = GetComponentsMomentOfInertia(bodies, jointTransform);
             link.Inertial.Inertia.SetMomentMatrix(moment);
 
-            link.Inertial.Mass.Value = GetCompomentsMass(bodies);
+            link.Inertial.Mass.Value = GetComponentsMass(bodies);
 
-            double[] centerOfMass = GetCompomentsCenterOfMass(bodies, jointTransform);
+            double[] centerOfMass = GetComponentsCenterOfMass(bodies, jointTransform);
             link.Inertial.Origin.SetXYZ(centerOfMass);
             link.Inertial.Origin.SetRPY(new double[3] { 0, 0, 0 });
         }
 
-        private static void ComputeVisualCollisionProperties(Link link)
+        private void ComputeVisualCollisionProperties(Link link)
         {
             link.Visual.Origin.SetXYZ(new double[3] { 0, 0, 0 });
             link.Visual.Origin.SetRPY(new double[3] { 0, 0, 0 });
@@ -323,7 +323,12 @@ namespace SW2URDF.URDFExport
                 return;
             }
 
-            ModelDoc2 mainCompdoc = link.SWComponents[0].GetModelDoc2();
+            Component2 mainComp = (link.SWComponents[0] as ComponentHandle)?.GetCOMObject(ActiveSWModel);
+            ModelDoc2 mainCompdoc = mainComp?.GetModelDoc2();
+            if (mainCompdoc == null)
+            {
+                return;
+            }
 
             // [ R, G, B, Ambient, Diffuse, Specular, Shininess, Transparency, Emission ]
             double[] values = mainCompdoc.MaterialPropertyValues;
@@ -338,8 +343,7 @@ namespace SW2URDF.URDFExport
         {
             if (node.Link.SWComponents.Count > 0)
             {
-                List<Component2> components = node.Link.SWComponents;
-                node.Link.SWMainComponent = components[0];
+                node.Link.SWMainComponent = node.Link.SWComponents[0];
             }
 
             if (parent != null && ComputeJointKinematics)
@@ -349,8 +353,7 @@ namespace SW2URDF.URDFExport
                 if (error)
                 {
                     logger.Warn(
-                        string.Format("Creating joint from parent {0} to child {1} failed", 
-                            parent.Name, node.Link.Name));
+                        $"Creating joint from parent {parent.Name} to child {node.Link.Name} failed");
                 }
             }
 
@@ -429,10 +432,9 @@ namespace SW2URDF.URDFExport
 
                 if (autoGenerateError)
                 {
-                    ExportErrorWhy = string.Format("Inferring the joint geometry failed for the joint {0} " +
-                        "from link {1} to {2} failed. Check that the mates have not fully defined the " +
-                        "components in link {1} and that there is exactly one degree of freedom.",
-                        child.Joint.Name, child.Name, parent.Name);
+                        ExportErrorWhy = $"Inferring the joint geometry failed for the joint " +
+                            $"from link {parent.Name} to {child.Name} failed. Check that the mates have not fully defined the " +
+                            $"components in link {parent.Name} and that there is exactly one degree of freedom.";
                     return false;
                 }
             }
@@ -691,7 +693,7 @@ namespace SW2URDF.URDFExport
                         referenceSketchName, "SKETCH", 0, 0, 0, false, 0, null, 0);
                 if (!sketchExists)
                 {
-                    throw new Exception("Reference sketch " + referenceSketchName + " does not exist");
+                    throw new ReferenceGeometryException("Reference sketch " + referenceSketchName + " does not exist");
                 }
                 ActiveSWModel.SketchManager.Insert3DSketch(true);
             }
@@ -811,14 +813,17 @@ namespace SW2URDF.URDFExport
             List<Component2> fixedComponents = FixComponents(parent);
 
             // Surpress Limit Mates to properly find degrees of freedom. They don't work with the API call
-            List<Mate2> limitMates = SuppressLimitMates(child.SWMainComponent);
+            List<Mate2> limitMates = new List<Mate2>();
+            Component2 parentSW = (parent.SWMainComponent as ComponentHandle)?.GetCOMObject(ActiveSWModel);
             Boolean success = false;
             if (child.SWMainComponent != null)
             {
+                Component2 childSWMain = (child.SWMainComponent as ComponentHandle)?.GetCOMObject(ActiveSWModel);
+                limitMates = SuppressLimitMates(childSWMain);
                 // The wonderful undocumented API call I found to get the degrees of freedom in a joint.
                 // https://forum.solidworks.com/thread/57414
                 int remainingDOFs =
-                    child.SWMainComponent.GetRemainingDOFs(
+                    childSWMain.GetRemainingDOFs(
                         out int R1Status, out MathPoint RPoint1, out int R1DirStatus, out MathVector RDir1,
                         out int R2Status, out MathPoint RPoint2, out int R2DirStatus, out MathVector RDir2,
                         out int L1Status, out MathVector LDir1,
@@ -861,8 +866,8 @@ namespace SW2URDF.URDFExport
 
                 // Convert the gotten degrees of freedom to a joint type, origin and axis
                 child.Joint.Type = "fixed";
-                child.Joint.Origin.SetXYZ(MathOps.GetXYZ(child.SWMainComponent.Transform2));
-                child.Joint.Origin.SetRPY(MathOps.GetRPY(child.SWMainComponent.Transform2));
+                child.Joint.Origin.SetXYZ(MathOps.GetXYZ(childSWMain.Transform2));
+                child.Joint.Origin.SetRPY(MathOps.GetRPY(childSWMain.Transform2));
 
                 if (degreesOfFreedom == 0 && (R1Status + L1Status > 0))
                 {
@@ -872,15 +877,15 @@ namespace SW2URDF.URDFExport
                         child.Joint.Type = "continuous";
                         child.Joint.Axis.SetXYZ(RDir1.ArrayData);
                         child.Joint.Origin.SetXYZ(RPoint1.ArrayData);
-                        child.Joint.Origin.SetRPY(MathOps.GetRPY(child.SWMainComponent.Transform2));
+                        child.Joint.Origin.SetRPY(MathOps.GetRPY(childSWMain.Transform2));
                         MoveOrigin(parent, child);
                     }
                     else if (L1Status == 1)
                     {
                         child.Joint.Type = "prismatic";
                         child.Joint.Axis.SetXYZ(LDir1.ArrayData);
-                        child.Joint.Origin.SetXYZ(MathOps.GetXYZ(child.SWMainComponent.Transform2));
-                        child.Joint.Origin.SetRPY(MathOps.GetRPY(child.SWMainComponent.Transform2));
+                        child.Joint.Origin.SetXYZ(MathOps.GetXYZ(childSWMain.Transform2));
+                        child.Joint.Origin.SetRPY(MathOps.GetRPY(childSWMain.Transform2));
                         MoveOrigin(parent, child);
                     }
                 }
@@ -889,7 +894,7 @@ namespace SW2URDF.URDFExport
                 UnsuppressLimitMates(limitMates);
                 if (limitMates.Count > 0 && ComputeJointLimits)
                 {
-                    AddLimits(child.Joint, limitMates, parent.SWMainComponent, child.SWMainComponent);
+                    AddLimits(child.Joint, limitMates, parentSW, childSWMain);
                 }
             }
 
@@ -905,9 +910,7 @@ namespace SW2URDF.URDFExport
                 GetCoordinateSystemTransform(child.Joint.CoordinateSystemName);
             if (GlobalCoordsysTransform == null)
             {
-                logger.Warn(
-                    string.Format("Joint transform for coordinate system {0} could not be computed for joint {1}", 
-                        child.Joint.CoordinateSystemName, child.Joint.Name));
+                    logger.Warn($"Joint transform for coordinate system {child.Joint.CoordinateSystemName} could not be computed for joint {child.Joint.Name}");
                 return;
             }
             child.Joint.Origin.SetXYZ(MathOps.GetXYZ(GlobalCoordsysTransform));
@@ -928,7 +931,7 @@ namespace SW2URDF.URDFExport
             MathTransform ComponentTransform = default;
             if (CoordinateSystemName == null)
             {
-                throw new Exception("Coordinate system string is null");
+                throw new ReferenceGeometryException("Coordinate system string is null");
             }
             if (CoordinateSystemName.Contains("<") && CoordinateSystemName.Contains(">"))
             {
@@ -970,8 +973,10 @@ namespace SW2URDF.URDFExport
             double zMin = Double.MaxValue;
             double[] points;
 
-            foreach (Component2 comp in nonLocalizedChild.SWComponents)
+            foreach (IComponentHandle handle in nonLocalizedChild.SWComponents)
             {
+                Component2 comp = (handle as ComponentHandle)?.GetCOMObject(ActiveSWModel);
+                if (comp == null) continue;
                 // Returns box as [ XCorner1, YCorner1, ZCorner1, XCorner2, YCorner2, ZCorner2 ]
                 points = comp.GetBox(false, false);
                 xMax = MathOps.Max(points[0], points[3], xMax);
@@ -1060,6 +1065,12 @@ namespace SW2URDF.URDFExport
 
                 // Transform to proper coordinates
                 axisVector = GlobalAxis(axisVector, ComponentTransform);
+            }
+            else
+            {
+                logger.Error("Could not select reference axis: " + axisName);
+                throw new ExportException("Failed to locate reference axis \"" + axisName +
+                    "\" in the model. The axis may have been renamed or deleted.");
             }
 
             return axisVector;
@@ -1391,7 +1402,7 @@ namespace SW2URDF.URDFExport
 
         private List<Component2> GetParentAncestorComponents(Link node)
         {
-            List<Component2> components = new List<Component2>(node.SWComponents);
+            List<Component2> components = node.SWComponents.ToCOMList(ActiveSWModel);
             if (node.Parent != null)
             {
                 components.AddRange(GetParentAncestorComponents(node.Parent));
@@ -1424,11 +1435,5 @@ namespace SW2URDF.URDFExport
         }
 
         #endregion Joint methods
-    }
-
-    public enum MeshExportFormat
-    {
-        STL,
-        THREEDXML
     }
 }

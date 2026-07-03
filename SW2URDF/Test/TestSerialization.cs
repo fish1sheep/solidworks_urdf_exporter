@@ -1,5 +1,4 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using SolidWorks.Interop.sldworks;
+﻿using SolidWorks.Interop.sldworks;
 using SW2URDF.URDF;
 using SW2URDF.URDFExport;
 using Xunit;
@@ -18,12 +17,9 @@ namespace SW2URDF.Test
         public void TestLoadConfigFromStringXML(string modelName, int expNumLinks)
         {
             ModelDoc2 doc = OpenSWDocument(modelName);
-            PrivateType serialization = new PrivateType(typeof(ConfigurationSerialization));
-            object swAttObj = serialization.InvokeStatic(
-                "FindSWSaveAttribute", new object[] { doc, "URDF Export Configuration" });
-            Xunit.Assert.NotNull(swAttObj);
-
-            Attribute swAtt = (Attribute)swAttObj;
+            SolidWorks.Interop.sldworks.Attribute swAtt =
+                ConfigurationSerialization.FindSWSaveAttribute(doc, "URDF Export Configuration");
+            Xunit.Assert.NotNull(swAtt);
             Parameter param = swAtt.GetParameter("data");
 
             Xunit.Assert.NotNull(param);
@@ -32,8 +28,7 @@ namespace SW2URDF.Test
             Xunit.Assert.NotNull(data);
             Xunit.Assert.NotEmpty(data);
 
-            LinkNode baseNode = (LinkNode)serialization.InvokeStatic(
-                "LoadConfigFromStringXML", new object[] { data });
+            LinkNode baseNode = ConfigurationSerialization.LoadConfigFromStringXML(data);
             Link link = baseNode.RebuildLink();
             Xunit.Assert.Equal(expNumLinks, CommonSwOperations.GetCount(link));
         }
@@ -59,9 +54,7 @@ namespace SW2URDF.Test
             LinkNode baseNode = ConfigurationSerialization.LoadBaseNodeFromModel(doc, out bool error);
             Xunit.Assert.False(error);
 
-            PrivateType serialization = new PrivateType(typeof(ConfigurationSerialization));
-            string newData = (string)serialization.InvokeStatic(
-                "SerializeToString", new object[] { baseNode });
+            string newData = ConfigurationSerialization.SerializeToString(baseNode);
             Xunit.Assert.NotNull(newData);
             Xunit.Assert.NotEmpty(newData);
 

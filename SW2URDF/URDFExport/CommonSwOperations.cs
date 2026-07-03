@@ -53,7 +53,25 @@ namespace SW2URDF.URDFExport
             }
         }
 
-        //Selects components from a list.
+        //Selects components from a list by converting handles to COM objects.
+        public static void SelectComponents(
+            ModelDoc2 model, List<IComponentHandle> components, bool clearSelection = true, int mark = -1)
+        {
+            if (clearSelection)
+            {
+                model.ClearSelection2(true);
+            }
+            SelectionMgr manager = model.SelectionManager;
+            SelectData data = manager.CreateSelectData();
+            data.Mark = mark;
+            foreach (IComponentHandle handle in components)
+            {
+                Component2 component = (handle as ComponentHandle)?.GetCOMObject(model);
+                component?.Select4(true, data, false);
+            }
+        }
+
+        //Selects components from a list (direct COM list, for internal use).
         public static void SelectComponents(
             ModelDoc2 model, List<Component2> components, bool clearSelection = true, int mark = -1)
         {
@@ -85,6 +103,23 @@ namespace SW2URDF.URDFExport
                 if (comp != null)
                 {
                     Components.Add(comp);
+                }
+            }
+        }
+
+        //Fills a list of IComponentHandle from the current SW selection.
+        public static void GetSelectedComponentHandles(
+            ModelDoc2 model, List<IComponentHandle> handles, int Mark = -1)
+        {
+            SelectionMgr selectionManager = model.SelectionManager;
+            handles.Clear();
+            for (int i = 0; i < selectionManager.GetSelectedObjectCount2(Mark); i++)
+            {
+                object obj = selectionManager.GetSelectedObject6(i + 1, Mark);
+                Component2 comp = (Component2)obj;
+                if (comp != null)
+                {
+                    handles.Add(new ComponentHandle(comp));
                 }
             }
         }
@@ -128,8 +163,22 @@ namespace SW2URDF.URDFExport
             model.ShowComponent2();
         }
 
+        //Shows components from an IComponentHandle list
+        public static void ShowComponents(ModelDoc2 model, List<IComponentHandle> components)
+        {
+            SelectComponents(model, components, true);
+            model.ShowComponent2();
+        }
+
         //Hides the components from a list
         public static void HideComponents(ModelDoc2 model, List<Component2> components)
+        {
+            SelectComponents(model, components, true);
+            model.HideComponent2();
+        }
+
+        //Hides components from an IComponentHandle list
+        public static void HideComponents(ModelDoc2 model, List<IComponentHandle> components)
         {
             SelectComponents(model, components, true);
             model.HideComponent2();
@@ -161,10 +210,14 @@ namespace SW2URDF.URDFExport
             if (node.Link.SWComponents != null)
             {
                 node.Link.SWComponentPIDs = new List<byte[]>();
-                foreach (IComponent2 comp in node.Link.SWComponents)
+                foreach (IComponentHandle handle in node.Link.SWComponents)
                 {
-                    byte[] PID = model.Extension.GetPersistReference3(comp);
-                    node.Link.SWComponentPIDs.Add(PID);
+                    Component2 comp = (handle as ComponentHandle)?.GetCOMObject(model);
+                    if (comp != null)
+                    {
+                        byte[] PID = model.Extension.GetPersistReference3(comp);
+                        node.Link.SWComponentPIDs.Add(PID);
+                    }
                 }
             }
             foreach (LinkNode child in node.Nodes)
@@ -177,7 +230,7 @@ namespace SW2URDF.URDFExport
         public static void SaveSWComponents(ModelDoc2 model, Link Link)
         {
             model.ClearSelection2(true);
-            byte[] PID = SaveSWComponent(model, Link.SWMainComponent);
+            byte[] PID = SaveSWComponent(model, (Link.SWMainComponent as ComponentHandle)?.GetCOMObject(model));
             if (PID != null)
             {
                 Link.SWMainComponentPID = PID;
@@ -190,7 +243,23 @@ namespace SW2URDF.URDFExport
             }
         }
 
-        //Converts SW component references to PIDs
+        //Converts SW component references to PIDs (from IComponentHandle list)
+        public static List<byte[]> SaveSWComponents(ModelDoc2 model, List<IComponentHandle> components)
+        {
+            List<byte[]> PIDs = new List<byte[]>();
+            foreach (IComponentHandle handle in components)
+            {
+                Component2 comp = (handle as ComponentHandle)?.GetCOMObject(model);
+                byte[] PID = SaveSWComponent(model, comp);
+                if (PID != null)
+                {
+                    PIDs.Add(PID);
+                }
+            }
+            return PIDs;
+        }
+
+        //Converts SW component references to PIDs (from direct COM list)
         public static List<byte[]> SaveSWComponents(ModelDoc2 model, List<Component2> components)
         {
             List<byte[]> PIDs = new List<byte[]>();
@@ -221,7 +290,7 @@ namespace SW2URDF.URDFExport
             logger.Info("Loading SolidWorks components for " +
                 node.Link.Name + " from " + model.GetPathName());
 
-            node.Link.SWComponents = LoadSWComponents(model, node.Link.SWComponentPIDs);
+            node.Link.SWComponents = LoadSWComponentHandles(model, node.Link.SWComponentPIDs);
             if (node.Link.SWComponents.Count != node.Link.SWComponentPIDs.Count)
             {
                 problemLinks.Add(node.Link.Name);
@@ -235,7 +304,28 @@ namespace SW2URDF.URDFExport
             }
         }
 
+        // Converts the PIDs to IComponentHandle wrappers (avoids direct COM exposure)
+        public static List<IComponentHandle> LoadSWComponentHandles(ModelDoc2 model, List<byte[]> PIDs)
+        {
+            List<IComponentHandle> handles = new List<IComponentHandle>();
+            foreach (byte[] PID in PIDs)
+            {
+                Component2 comp = LoadSWComponent(model, PID, out string errorReason);
+                if (comp != null)
+                {
+                    handles.Add(new ComponentHandle(comp, PID));
+                    logger.Info("Successfully loaded component " + comp.GetPathName());
+                }
+                else if (errorReason != null)
+                {
+                    logger.Warn("Failed to load component: " + errorReason);
+                }
+            }
+            return handles;
+        }
+
         // Converts the PIDs to actual references to the components
+        [System.Obsolete("Use LoadSWComponentHandles instead for new code")]
         public static List<Component2> LoadSWComponents(ModelDoc2 model, List<byte[]> PIDs)
         {
             List<Component2> components = new List<Component2>();
@@ -243,7 +333,7 @@ namespace SW2URDF.URDFExport
             {
                 string byteAsString = PIDToString(PID);
                 logger.Info("Loading component with PID " + byteAsString);
-                Component2 comp = LoadSWComponent(model, PID);
+                Component2 comp = LoadSWComponent(model, PID, out string errorReason);
                 if (comp == null)
                 {
                     logger.Warn("Component with PID " + byteAsString + " failed to load");
@@ -257,14 +347,59 @@ namespace SW2URDF.URDFExport
             return components;
         }
 
-        // Converts a single PID to a Component2 object
-        public static Component2 LoadSWComponent(ModelDoc2 model, byte[] PID)
+        // Converts a single PID to a Component2 object with error reason
+        public static Component2 LoadSWComponent(ModelDoc2 model, byte[] PID, out string errorReason)
         {
-            string byteAsString = PIDToString(PID);
+            errorReason = null;
             if (PID == null)
             {
-                throw new System.Exception("PID " + byteAsString + " was null. Is the configuration corrupted?");    
+                errorReason = "PID was null. Configuration may be corrupted.";
+                throw new URDFConfigurationException("PID was null. Is the configuration corrupted?");
             }
+            string byteAsString = PIDToString(PID);
+
+            object obj = model.Extension.GetObjectByPersistReference3(PID, out int Errors);
+            if (Errors == 0)
+            {
+                return (Component2)obj;
+            }
+            switch ((swPersistReferencedObjectStates_e)Errors)
+            {
+                case swPersistReferencedObjectStates_e.swPersistReferencedObject_Deleted:
+                    errorReason = "deleted";
+                    logger.Error("The component associated with PID " + byteAsString + " was deleted");
+                    break;
+
+                case swPersistReferencedObjectStates_e.swPersistReferencedObject_Invalid:
+                    errorReason = "invalid";
+                    logger.Error("The component associated with PID " + byteAsString + " was found to be invalid");
+                    break;
+
+                case swPersistReferencedObjectStates_e.swPersistReferencedObject_Suppressed:
+                    errorReason = "suppressed";
+                    logger.Error("The component associated with PID " + byteAsString + " is suppressed");
+                    break;
+
+                case swPersistReferencedObjectStates_e.swPersistReferencedObject_Ok:
+                    break;
+
+                default:
+                    errorReason = "unspecified (" + Errors + ")";
+                    logger.Error("The component associated with PID " + byteAsString +
+                        " was not loaded due to an unspecified error (" + Errors + ")");
+                    break;
+            }
+            return null;
+        }
+
+        // Legacy overload (for backward compatibility)
+        public static Component2 LoadSWComponent(ModelDoc2 model, byte[] PID)
+        {
+            if (PID == null)
+            {
+                throw new URDFConfigurationException("PID was null. Is the configuration corrupted?");
+            }
+            string byteAsString = PIDToString(PID);
 
             object obj = model.Extension.GetObjectByPersistReference3(PID, out int Errors);
             if (Errors == 0)

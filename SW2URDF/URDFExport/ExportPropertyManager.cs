@@ -48,7 +48,7 @@ namespace SW2URDF.URDFExport
         public SldWorks swApp;
         public ModelDoc2 ActiveSWModel;
 
-        public ExportHelper Exporter;
+        public IExportHelper Exporter;
         public LinkNode previouslySelectedNode;
         public Link previouslySelectedLink;
         public List<Link> linksToVisit;
@@ -111,7 +111,25 @@ namespace SW2URDF.URDFExport
         private const int ComputeJointLimitsID = 30;
         private const int LoadedCSVFilenameID = 31;
 
+        // New unique IDs fixing control ID collisions
+        private const int TextBoxJointNameID = 4;
+        private const int ComboBoxAxesID = 5;
+        private const int LabelJointTypeID = 6;
+        private const int ComboBoxJointTypeID = 9;
+
         #endregion class variables
+
+        /// <summary>
+        /// Logs the exception and shows a user-friendly message in a consistent format.
+        /// This is used by all tree view event handlers to avoid duplicating the same catch block.
+        /// </summary>
+        private void HandleTreeViewEventError(string eventName, Exception ex)
+        {
+            logger.Error("Exception caught on tree view " + eventName, ex);
+            MessageBox.Show("There was a problem with the property manager: \n\"" +
+                ex.Message + "\"\nEmail your maintainer with the log file found at " +
+                Logger.GetFileName());
+        }
 
         public void Show()
         {
@@ -460,7 +478,8 @@ namespace SW2URDF.URDFExport
             if (Id == NumBoxChildCountID)
             {
                 LinkNode node = (LinkNode)Tree.SelectedNode;
-                CreateNewNodes(node);
+                if (node != null)
+                    CreateNewNodes(node);
             }
         }
 
@@ -487,8 +506,11 @@ namespace SW2URDF.URDFExport
             if (Id == TextBoxLinkNameID)
             {
                 LinkNode node = (LinkNode)Tree.SelectedNode;
-                node.Text = PMTextBoxLinkName.Text;
-                node.Name = PMTextBoxLinkName.Text;
+                if (node != null)
+                {
+                    node.Text = PMTextBoxLinkName.Text;
+                    node.Name = PMTextBoxLinkName.Text;
+                }
             }
         }
 
@@ -515,10 +537,7 @@ namespace SW2URDF.URDFExport
             }
             catch (Exception ex)
             {
-                logger.Error("Exception caught on tree view AfterSelect ", ex);
-                MessageBox.Show("There was a problem with the property manager: \n\"" +
-                    ex.Message + "\"\nEmail your maintainer with the log file found at " +
-                    Logger.GetFileName());
+                HandleTreeViewEventError("AfterSelect ", ex);
             }
         }
 
@@ -553,10 +572,7 @@ namespace SW2URDF.URDFExport
             }
             catch (Exception ex)
             {
-                logger.Error("Exception caught on tree view add child ", ex);
-                MessageBox.Show("There was a problem with the property manager: \n\"" +
-                    ex.Message + "\"\nEmail your maintainer with the log file found at " +
-                    Logger.GetFileName());
+                HandleTreeViewEventError("add child ", ex);
             }
         }
 
@@ -570,10 +586,7 @@ namespace SW2URDF.URDFExport
             }
             catch (Exception ex)
             {
-                logger.Error("Exception caught on tree view remove child ", ex);
-                MessageBox.Show("There was a problem with the property manager: \n\"" +
-                    ex.Message + "\"\nEmail your maintainer with the log file found at " +
-                    Logger.GetFileName());
+                HandleTreeViewEventError("remove child ", ex);
             }
         }
 
@@ -606,10 +619,7 @@ namespace SW2URDF.URDFExport
             }
             catch (Exception ex)
             {
-                logger.Error("Exception caught on tree view Drag ", ex);
-                MessageBox.Show("There was a problem with the property manager: \n\"" +
-                    ex.Message + "\"\nEmail your maintainer with the log file found at " +
-                    Logger.GetFileName());
+                HandleTreeViewEventError("Drag ", ex);
             }
         }
 
@@ -626,10 +636,7 @@ namespace SW2URDF.URDFExport
             }
             catch (Exception ex)
             {
-                logger.Error("Exception caught on tree view Drag Over ", ex);
-                MessageBox.Show("There was a problem with the property manager: \n\"" +
-                    ex.Message + "\"\nEmail your maintainer with the log file found at " +
-                    Logger.GetFileName());
+                HandleTreeViewEventError("Drag Over ", ex);
             }
         }
 
@@ -646,10 +653,7 @@ namespace SW2URDF.URDFExport
             }
             catch (Exception ex)
             {
-                logger.Error("Exception caught on tree view DragEnter ", ex);
-                MessageBox.Show("There was a problem with the property manager: \n\"" +
-                    ex.Message + "\"\nEmail your maintainer with the log file found at " +
-                    Logger.GetFileName());
+                HandleTreeViewEventError("DragEnter ", ex);
             }
         }
 
@@ -685,10 +689,7 @@ namespace SW2URDF.URDFExport
             }
             catch (Exception ex)
             {
-                logger.Error("Exception caught on tree view Drag Drop ", ex);
-                MessageBox.Show("There was a problem with the property manager: \n\"" +
-                    ex.Message + "\"\nEmail your maintainer with the log file found at " +
-                    Logger.GetFileName());
+                HandleTreeViewEventError("Drag Drop ", ex);
             }
         }
 
@@ -754,7 +755,7 @@ namespace SW2URDF.URDFExport
             tip = "Enter the name of the joint";
             options = (int)swAddControlOptions_e.swControlOptions_Visible;
             PMTextBoxJointName = (PropertyManagerPageTextbox)PMGroup.AddControl2(
-                TextBoxLinkNameID, (short)(controlType), caption, (short)alignment, (int)options, tip);
+                TextBoxJointNameID, (short)(controlType), caption, (short)alignment, (int)options, tip);
 
             //Create the global origin coordinate sys label
             controlType = (int)swPropertyManagerPageControlType_e.swControlType_Label;
@@ -812,7 +813,7 @@ namespace SW2URDF.URDFExport
             alignment = (int)swPropertyManagerPageControlLeftAlign_e.swControlAlign_Indent;
             options = (int)swAddControlOptions_e.swControlOptions_Visible;
             PMComboBoxAxes = (PropertyManagerPageCombobox)PMGroup.AddControl2(
-                ComboBoxCoordSysID, (short)controlType, caption, (short)alignment, (int)options, tip);
+                ComboBoxAxesID, (short)controlType, caption, (short)alignment, (int)options, tip);
             PMComboBoxAxes.Style =
                 (int)swPropMgrPageComboBoxStyle_e.swPropMgrPageComboBoxStyle_EditBoxReadOnly;
 
@@ -823,7 +824,7 @@ namespace SW2URDF.URDFExport
             alignment = (int)swPropertyManagerPageControlLeftAlign_e.swControlAlign_LeftEdge;
             options = (int)swAddControlOptions_e.swControlOptions_Visible;
             PMLabelJointType = (PropertyManagerPageLabel)PMGroup.AddControl2(
-                LabelAxesID, (short)controlType, caption, (short)alignment, (int)options, tip);
+                LabelJointTypeID, (short)controlType, caption, (short)alignment, (int)options, tip);
 
             // Create pull down menu for joint type
             controlType = (int)swPropertyManagerPageControlType_e.swControlType_Combobox;
@@ -832,7 +833,7 @@ namespace SW2URDF.URDFExport
             alignment = (int)swPropertyManagerPageControlLeftAlign_e.swControlAlign_Indent;
             options = (int)swAddControlOptions_e.swControlOptions_Visible;
             PMComboBoxJointType = (PropertyManagerPageCombobox)PMGroup.AddControl2(
-                ComboBoxCoordSysID, (short)controlType, caption, (short)alignment, (int)options, tip);
+                ComboBoxJointTypeID, (short)controlType, caption, (short)alignment, (int)options, tip);
             PMComboBoxJointType.Style =
                 (int)swPropMgrPageComboBoxStyle_e.swPropMgrPageComboBoxStyle_EditBoxReadOnly;
             PMComboBoxJointType.AddItems(new string[] {

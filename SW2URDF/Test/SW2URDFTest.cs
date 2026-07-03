@@ -115,7 +115,7 @@ namespace SW2URDF.Test
             Assert.True(File.Exists(filename));
             int errors = 0;
             int warnings = 0;
-            int filetype = (int)swDocumentTypes_e.swDocASSEMBLY;
+            int filetype = (int)swDocumentTypes_e.swDocPART;
             string configuration = "";
 
             ModelDoc2 doc = SwApp.OpenDoc6(filename, filetype, (int)swOpenDocOptions_e.swOpenDocOptions_Silent, 

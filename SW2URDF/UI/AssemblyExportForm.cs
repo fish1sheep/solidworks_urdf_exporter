@@ -39,7 +39,7 @@ namespace SW2URDF.UI
     {
         private static readonly log4net.ILog logger = Logger.GetLogger();
 
-        public ExportHelper Exporter;
+        public IExportHelper Exporter;
         public bool AutoUpdatingForm;
         public AttributeDef saveConfigurationAttributeDef;
 
@@ -50,7 +50,7 @@ namespace SW2URDF.UI
         private readonly Control[] linkBoxes;
         private readonly LinkNode BaseNode;
 
-        public AssemblyExportForm(SldWorks SwApp, LinkNode node, ExportHelper exporter)
+        public AssemblyExportForm(SldWorks SwApp, LinkNode node, IExportHelper exporter)
         {
             Application.ThreadException +=
                 new ThreadExceptionEventHandler(ExceptionHandler);
@@ -292,21 +292,28 @@ namespace SW2URDF.UI
                 }
             }
 
-            SaveFileDialog saveFileDialog1 = new SaveFileDialog
+            string selectedPath = null;
+            string selectedFileName = null;
+            using (SaveFileDialog saveFileDialog1 = new SaveFileDialog
             {
                 RestoreDirectory = true,
                 InitialDirectory = Exporter.SavePath,
                 FileName = Exporter.PackageName
-            };
-
-            bool saveResult = DialogResult.OK == saveFileDialog1.ShowDialog();
-            saveFileDialog1.Dispose();
-            if (saveResult)
+            })
             {
-                Exporter.SavePath = Path.GetDirectoryName(saveFileDialog1.FileName);
-                Exporter.PackageName = Path.GetFileName(saveFileDialog1.FileName);
+                if (DialogResult.OK == saveFileDialog1.ShowDialog())
+                {
+                    selectedPath = Path.GetDirectoryName(saveFileDialog1.FileName);
+                    selectedFileName = Path.GetFileName(saveFileDialog1.FileName);
+                }
+            }
 
-                logger.Info("Saving URDF package to " + saveFileDialog1.FileName);
+            if (selectedPath != null)
+            {
+                Exporter.SavePath = selectedPath;
+                Exporter.PackageName = selectedFileName;
+
+                logger.Info("Saving URDF package to " + Path.Combine(selectedPath, selectedFileName));
 
                 MeshExportFormat meshFormat;
                 if(radioButtonStl.Checked)
@@ -364,9 +371,10 @@ namespace SW2URDF.UI
 
             SelectData data = manager.CreateSelectData();
             data.Mark = -1;
-            foreach (Component2 component in node.Link.SWComponents)
+            foreach (IComponentHandle handle in node.Link.SWComponents)
             {
-                component.Select4(true, data, false);
+                Component2 component = (handle as ComponentHandle)?.GetCOMObject(ActiveSWModel);
+                component?.Select4(true, data, false);
             }
             FillLinkPropertyBoxes(node.Link);
             treeViewLinkProperties.Focus();
@@ -437,9 +445,10 @@ namespace SW2URDF.UI
 
             SelectData data = manager.CreateSelectData();
             data.Mark = -1;
-            foreach (Component2 component in node.Link.SWComponents)
+            foreach (IComponentHandle handle in node.Link.SWComponents)
             {
-                component.Select4(true, data, false);
+                Component2 component = (handle as ComponentHandle)?.GetCOMObject(ActiveSWModel);
+                component?.Select4(true, data, false);
             }
             node.NodeFont = fontBold;
             node.Text = node.Text;

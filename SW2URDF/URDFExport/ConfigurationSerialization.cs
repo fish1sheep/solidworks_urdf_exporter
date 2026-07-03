@@ -63,7 +63,7 @@ namespace SW2URDF.URDFExport
             if (configVersion > SerializationVersion)
             {
                 MessageBox.Show("The configuration saved in this model is newer than what this " +
-                    "exporter supports " + string.Format("({0} > {1})", configVersion, SerializationVersion) +
+                    "exporter supports " + $"({configVersion} > {SerializationVersion})" +
                     ". Please update your exporter version");
                 error = true;
                 return null;
@@ -80,6 +80,16 @@ namespace SW2URDF.URDFExport
 
             error = false;
             return basenode;
+        }
+
+        /// <summary>
+        /// Convenience method that retrieves SW component PIDs and saves the config tree.
+        /// Combines the two steps that are always done together, eliminating code duplication.
+        /// </summary>
+        public static void SaveConfigTree(SldWorks swApp, ModelDoc2 model, LinkNode BaseNode, bool warnUser)
+        {
+            CommonSwOperations.RetrieveSWComponentPIDs(model, BaseNode);
+            SaveConfigTreeXML(swApp, model, BaseNode, warnUser);
         }
 
         /// <summary>
@@ -151,7 +161,7 @@ namespace SW2URDF.URDFExport
         /// </summary>
         /// <param name="node">TreeView LinkNode to serialize</param>
         /// <returns>A string serialized utilizing DataContract serialization XML scheme</returns>
-        private static string SerializeToString(LinkNode node)
+        internal static string SerializeToString(LinkNode node)
         {
             SavePropertiesLinkNodeToLink(node);
             Link link = node.UpdateLinkTree(null);
@@ -213,19 +223,19 @@ namespace SW2URDF.URDFExport
         /// </summary>
         /// <param name="data">Data string to deserialize using XMLSerializer</param>
         /// <returns>TreeView LinkNode</returns>
-        private static LinkNode LoadConfigFromStringXML(string data)
+        internal static LinkNode LoadConfigFromStringXML(string data)
         {
             LinkNode baseNode = null;
             if (!string.IsNullOrWhiteSpace(data))
             {
                 XmlSerializer serializer = new XmlSerializer(typeof(SerialNode));
-                XmlTextReader textReader = new XmlTextReader(new StringReader(data));
-                // Not reading external files, so this can set to prohibit. Resolves CA3075
-                textReader.DtdProcessing = DtdProcessing.Prohibit;
-                SerialNode sNode = (SerialNode)serializer.Deserialize(textReader);
-                textReader.Close();
-
-                baseNode = sNode.BuildLinkNodeFromSerialNode();
+                using (XmlTextReader textReader = new XmlTextReader(new StringReader(data)))
+                {
+                    // Not reading external files, so this can set to prohibit. Resolves CA3075
+                    textReader.DtdProcessing = DtdProcessing.Prohibit;
+                    SerialNode sNode = (SerialNode)serializer.Deserialize(textReader);
+                    baseNode = sNode.BuildLinkNodeFromSerialNode();
+                }
             }
             return baseNode;
         }
@@ -313,7 +323,7 @@ namespace SW2URDF.URDFExport
         /// <param name="model">ModelDoc model to search through</param>
         /// <param name="name">Name of attribute to find</param>
         /// <returns>SolidWorks Attribute if found, otherwise null</returns>
-        private static SolidWorks.Interop.sldworks.Attribute
+        internal static SolidWorks.Interop.sldworks.Attribute
             FindSWSaveAttribute(ModelDoc2 model, string name)
         {
             Feature feature = GetFeatureAttributeByName(model, name);

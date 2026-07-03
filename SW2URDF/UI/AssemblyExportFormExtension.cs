@@ -42,7 +42,7 @@ namespace SW2URDF.UI
             if (!Link.isFixedFrame)
             {
                 //G5: Maximum decimal places to use (not counting exponential notation) is 5
-                Link.Visual.Origin.FillBoxes(textBoxVisualOriginX,
+                Link.Visual?.Origin?.FillBoxes(textBoxVisualOriginX,
                                              textBoxVisualOriginY,
                                              textBoxVisualOriginZ,
                                              textBoxVisualOriginRoll,
@@ -50,7 +50,7 @@ namespace SW2URDF.UI
                                              textBoxVisualOriginYaw,
                                              "G5");
 
-                Link.Inertial.Origin.FillBoxes(textBoxInertialOriginX,
+                Link.Inertial?.Origin?.FillBoxes(textBoxInertialOriginX,
                                                textBoxInertialOriginY,
                                                textBoxInertialOriginZ,
                                                textBoxInertialOriginRoll,
@@ -58,9 +58,9 @@ namespace SW2URDF.UI
                                                textBoxInertialOriginYaw,
                                                "G5");
 
-                Link.Inertial.Mass.FillBoxes(textBoxMass, "G5");
+                Link.Inertial?.Mass?.FillBoxes(textBoxMass, "G5");
 
-                Link.Inertial.Inertia.FillBoxes(textBoxIxx,
+                Link.Inertial?.Inertia?.FillBoxes(textBoxIxx,
                                                 textBoxIxy,
                                                 textBoxIxz,
                                                 textBoxIyy,
@@ -68,10 +68,11 @@ namespace SW2URDF.UI
                                                 textBoxIzz,
                                                 "G5");
 
-                Link.Visual.Material.FillBoxes(comboBoxMaterials);
-                textBoxTexture.Text = Link.Visual.Material.Texture.wFilename;
+                Link.Visual?.Material?.FillBoxes(comboBoxMaterials);
+                if (Link.Visual?.Material != null)
+                    textBoxTexture.Text = Link.Visual.Material.Texture?.wFilename ?? "";
 
-                Link.Visual.Material.Color.FillBoxes(domainUpDownRed,
+                Link.Visual?.Material?.Color?.FillBoxes(domainUpDownRed,
                                                      domainUpDownGreen,
                                                      domainUpDownBlue,
                                                      domainUpDownAlpha,
@@ -423,6 +424,19 @@ namespace SW2URDF.UI
         {
             string msg = "";
 
+            // Check for missing visual geometry
+            if (node.Visual != null && !node.Visual.ElementContainsData() &&
+                node.Collision != null && node.Collision.ElementContainsData())
+            {
+                msg = "Link has collision geometry but no visual geometry defined";
+            }
+            // Check for missing collision geometry
+            else if (node.Collision != null && !node.Collision.ElementContainsData() &&
+                node.Visual != null && node.Visual.ElementContainsData())
+            {
+                msg = "Link has visual geometry but no collision geometry defined";
+            }
+
             if (!string.IsNullOrWhiteSpace(msg))
             {
                 builder.Append(node.Name + " - " + msg + "\r\n");
@@ -442,8 +456,7 @@ namespace SW2URDF.UI
 
         public void SaveConfigTree(ModelDoc2 model, LinkNode BaseNode, bool warnUser)
         {
-            CommonSwOperations.RetrieveSWComponentPIDs(model, BaseNode);
-            ConfigurationSerialization.SaveConfigTreeXML(swApp, model, BaseNode, warnUser);
+            ConfigurationSerialization.SaveConfigTree(swApp, model, BaseNode, warnUser);
         }
 
         public void ChangeAllNodeFont(LinkNode node, Font font)

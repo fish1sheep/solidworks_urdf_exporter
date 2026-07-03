@@ -27,12 +27,12 @@ using System.Reflection;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 //
-[assembly: AssemblyTitle("")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyTitle("SW2URDF - SolidWorks to URDF Exporter")]
+[assembly: AssemblyDescription("SolidWorks add-in for exporting robot models to URDF format for ROS/ROS2")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("")]
-[assembly: AssemblyCopyright("")]
+[assembly: AssemblyProduct("SW2URDF")]
+[assembly: AssemblyCopyright("Copyright © 2015-2026 Stephen Brawner and contributors")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

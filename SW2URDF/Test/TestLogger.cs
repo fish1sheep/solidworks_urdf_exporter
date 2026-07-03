@@ -1,4 +1,4 @@
-﻿using log4net;
+using log4net;
 using SW2URDF.Utilities;
 using System.IO;
 using Xunit;
@@ -11,17 +11,20 @@ namespace SW2URDF.Test
         {
         }
 
-        public static void TestGetLogger()
+        [Fact]
+        public void TestGetLogger()
         {
             Assert.NotNull(Logger.GetLogger());
         }
 
-        public static void TestGetLoggerTwice()
+        [Fact]
+        public void TestGetLoggerTwice()
         {
             Assert.Equal(Logger.GetLogger(), Logger.GetLogger());
         }
 
-        public static void TestLoggerFileExists()
+        [Fact]
+        public void TestLoggerFileExists()
         {
             ILog logger = Logger.GetLogger();
             string filename = Logger.GetFileName();

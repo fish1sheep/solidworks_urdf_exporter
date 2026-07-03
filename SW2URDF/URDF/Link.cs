@@ -47,9 +47,9 @@ namespace SW2URDF.URDF
         [DataMember]
         public bool isFixedFrame;
 
-        public Component2 SWMainComponent;
+        public IComponentHandle SWMainComponent;
 
-        public List<Component2> SWComponents;
+        public List<IComponentHandle> SWComponents;
 
         [DataMember]
         public List<byte[]> SWComponentPIDs;
@@ -61,7 +61,7 @@ namespace SW2URDF.URDF
         {
             Parent = null;
             Children = new List<Link>();
-            SWComponents = new List<Component2>();
+            SWComponents = new List<IComponentHandle>();
             SWComponentPIDs = new List<byte[]>();
             NameAttribute = new URDFAttribute("name", true, "");
 
@@ -86,7 +86,7 @@ namespace SW2URDF.URDF
             foreach (Link child in Children)
             {
                 Link clonedChild = child.Clone();
-                clonedChild.Parent = this;
+                clonedChild.Parent = cloned;
                 cloned.Children.Add(clonedChild);
             }
             return cloned;
@@ -96,7 +96,7 @@ namespace SW2URDF.URDF
         {
             Parent = parent;
             Children = new List<Link>();
-            SWComponents = new List<Component2>();
+            SWComponents = new List<IComponentHandle>();
             SWComponentPIDs = new List<byte[]>();
             NameAttribute = new URDFAttribute("name", true, "");
 
@@ -146,7 +146,7 @@ namespace SW2URDF.URDF
 
         public override void AppendToCSVDictionary(List<string> context, OrderedDictionary dictionary)
         {
-            IEnumerable<string> componentNames = SWComponents.Select(component => component.Name2);
+            IEnumerable<string> componentNames = SWComponents?.Select(component => component.Name) ?? Enumerable.Empty<string>();
             string componentNamesStr = string.Join(";", componentNames);
             string componentsContext = "Link.SWComponents";
             dictionary.Add(componentsContext, componentNamesStr);
@@ -164,11 +164,11 @@ namespace SW2URDF.URDF
         {
             if (externalLink.SWComponents != null)
             {
-                SWComponents = new List<Component2>(externalLink.SWComponents);
+                SWComponents = new List<IComponentHandle>(externalLink.SWComponents);
             }
             else
             {
-                SWComponents = new List<Component2>();
+                SWComponents = new List<IComponentHandle>();
             }
             if (externalLink.SWComponentPIDs != null)
             {
