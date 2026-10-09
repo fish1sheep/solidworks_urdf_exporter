@@ -697,21 +697,21 @@ namespace SW2URDF.URDFExport
         {
             logger.Info("Returning STL preferences to user preferences");
             List<string> failures = new List<string>();
-            RestorePreference(() => iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLBinaryFormat, mBinary),
+            TryRestore(() => iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLBinaryFormat, mBinary),
                 "binary STL format", failures);
-            RestorePreference(() => iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLDontTranslateToPositive, mTranslateToPositive),
+            TryRestore(() => iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLDontTranslateToPositive, mTranslateToPositive),
                 "STL translation", failures);
             RestorePreference(() => iSwApp.SetUserPreferenceIntegerValue((int)swUserPreferenceIntegerValue_e.swExportStlUnits, mSTLUnits),
                 "STL units", failures);
             RestorePreference(() => iSwApp.SetUserPreferenceIntegerValue((int)swUserPreferenceIntegerValue_e.swSTLQuality, mSTLQuality),
                 "STL quality", failures);
-            RestorePreference(() => iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLShowInfoOnSave, mshowInfo),
+            TryRestore(() => iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLShowInfoOnSave, mshowInfo),
                 "STL save information", failures);
-            RestorePreference(() => iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLPreview, mSTLPreview),
+            TryRestore(() => iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLPreview, mSTLPreview),
                 "STL preview", failures);
             RestorePreference(() => iSwApp.SetUserPreferenceDoubleValue((int)swUserPreferenceDoubleValue_e.swViewTransitionHideShowComponent, mHideTransitionSpeed),
                 "component transition speed", failures);
-            RestorePreference(() => iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLComponentsIntoOneFile, mSaveComponentsIntoOneFile),
+            TryRestore(() => iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLComponentsIntoOneFile, mSaveComponentsIntoOneFile),
                 "STL component grouping", failures);
             RestorePreference(() => ActiveSWModel.Extension.SetUserPreferenceString(
                 (int)swUserPreferenceStringValue_e.swFileSaveAsCoordinateSystem,

@@ -9,8 +9,18 @@
 #define MainBinaryName  "SW2URDF.dll"
 #define SetupBaseName   "sw2urdfSetup_"
 #define DllLocation     AddBackslash(SourcePath + "..\SW2URDF\bin\x64\Release") + MainBinaryName
+#if !FileExists(DllLocation)
+  #error "Missing SW2URDF/bin/x64/Release/SW2URDF.dll. Build SW2URDF in Release x64 before compiling the installer."
+#endif
 #define BuildVersion    GetVersionNumbersString(DllLocation)
-#define CommitVersion   GetFileProductVersion(DllLocation)
+#if BuildVersion == ""
+  #error "SW2URDF.dll has no numeric file version. Rebuild SW2URDF in Release x64 before compiling the installer."
+#endif
+#define CommitVersion   GetFileProductVersionString(DllLocation)
+#if CommitVersion == ""
+  #undef CommitVersion
+  #define CommitVersion BuildVersion
+#endif
 #define AVF1            Copy(BuildVersion, 1, Pos(".", BuildVersion) - 1) + "_" + Copy(BuildVersion, Pos(".", BuildVersion) + 1)
 #define AVF2            Copy(AVF1,       1, Pos(".", AVF1      ) - 1) + "_" + Copy(AVF1      , Pos(".", AVF1      ) + 1)
 #define AppVersionFile  Copy(AVF2,       1, Pos(".", AVF2      ) - 1) + "_" + Copy(AVF2      , Pos(".", AVF2      ) + 1)

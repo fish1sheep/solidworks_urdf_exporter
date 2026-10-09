@@ -516,6 +516,7 @@
     <PreBuildEvent>"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -ExecutionPolicy Bypass -File "$(SolutionDir)scripts\UpdateVersionInfo.ps1" --filename "$(ProjectDir)Versioning\VersionInfo.cs"</PreBuildEvent>
     <PostBuildEvent>
 REM === Framework version detection ===
+IF "$(TargetFrameworkVersion)"=="v4.8" GOTO NET40
 IF "$(TargetFrameworkVersion)"=="v4.5.2" GOTO NET40
 IF "$(TargetFrameworkVersion)"=="v4.5" GOTO NET40
 IF "$(TargetFrameworkVersion)"=="v4.0" GOTO NET40
@@ -525,11 +526,11 @@ IF "$(TargetFrameworkVersion)"=="v2.0" GOTO NET20
 GOTO END
 
 :NET40
-set FMWK="v4.0.30319"
+set "FMWK=v4.0.30319"
 GOTO CHECKCONFIG
 
 :NET20
-set FMWK="v2.0.50727"
+set "FMWK=v2.0.50727"
 GOTO CHECKCONFIG
 
 REM === Branch by configuration ===
