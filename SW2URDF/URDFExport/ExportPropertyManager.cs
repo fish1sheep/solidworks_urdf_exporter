@@ -324,6 +324,20 @@ namespace SW2URDF.URDFExport
 
         private void LoadFromCSV()
         {
+            try
+            {
+                LoadFromCSVCore();
+            }
+            catch (Exception error)
+            {
+                logger.Error("CSV import failed", error);
+                MessageBox.Show("Could not import CSV:\n" + error.Message +
+                    "\nLog file: " + Logger.GetFileName());
+            }
+        }
+
+        private void LoadFromCSVCore()
+        {
             SaveActiveNode();
 
             LinkNode existingBaseNode = (LinkNode)Tree.Nodes[0].Clone();

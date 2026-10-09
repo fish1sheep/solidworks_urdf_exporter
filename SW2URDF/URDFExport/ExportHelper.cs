@@ -168,11 +168,13 @@ namespace SW2URDF.URDFExport
             bool visibilityChanged = false;
             bool progressStarted = false;
             List<string> hiddenComponents = null;
+            PackageExportTransaction transaction = null;
             try
             {
                 ExportValidation.Validate(URDFRobot, PackageName, SavePath);
                 URDFRobot = CreateExportCopy(sourceRobot);
-                URDFPackage package = new URDFPackage(PackageName, SavePath);
+                transaction = new PackageExportTransaction(PackageName, SavePath);
+                URDFPackage package = transaction.Package;
 
                 iSwApp.GetUserProgressBar(out progressBar);
                 if (progressBar != null)
@@ -199,9 +201,11 @@ namespace SW2URDF.URDFExport
                 WriteRobotFile(package);
                 ImportExport.WriteRobotToCSV(URDFRobot,
                     Path.Combine(package.WindowsRobotsDirectory, URDFRobot.Name + ".csv"));
-                TryCopyLogFile(package);
-                logger.Info("URDF package export completed: " + package.WindowsPackageDirectory);
+                transaction.Commit();
                 exportSucceeded = true;
+                URDFPackage finalPackage = new URDFPackage(PackageName, SavePath);
+                logger.Info("URDF package export completed: " + finalPackage.WindowsPackageDirectory);
+                TryCopyLogFile(finalPackage);
                 return true;
             }
             catch (Exception e)
@@ -216,6 +220,7 @@ namespace SW2URDF.URDFExport
                     URDFRobot = sourceRobot;
                 }
                 RestoreExportState(preferencesSaved, visibilityChanged, hiddenComponents, progressStarted);
+                CleanupExportTransaction(transaction);
             }
         }
 
@@ -427,6 +432,7 @@ namespace SW2URDF.URDFExport
             Robot sourceRobot = URDFRobot;
             bool exportSucceeded = false;
             bool preferencesSaved = false;
+            PackageExportTransaction transaction = null;
             try
             {
                 ExportValidation.Validate(URDFRobot, PackageName, SavePath);
@@ -440,7 +446,8 @@ namespace SW2URDF.URDFExport
                 }
                 LocalizeLink(URDFRobot.BaseLink, MathOps.GetTransformation(coordSysTransform));
 
-                URDFPackage package = new URDFPackage(PackageName, SavePath);
+                transaction = new PackageExportTransaction(PackageName, SavePath);
+                URDFPackage package = transaction.Package;
                 package.CreatePackageFiles(URDFRobot);
                 Link link = URDFRobot.BaseLink;
                 string meshFileName = package.GetMeshPackageUri(link.Name, ".STL");
@@ -466,9 +473,11 @@ namespace SW2URDF.URDFExport
                 link.Collision.Geometry.Mesh.Filename = meshFileName;
                 CopyTexture(link, package);
                 WriteRobotFile(package);
-                TryCopyLogFile(package);
-                logger.Info("URDF part export completed: " + package.WindowsPackageDirectory);
+                transaction.Commit();
                 exportSucceeded = true;
+                URDFPackage finalPackage = new URDFPackage(PackageName, SavePath);
+                logger.Info("URDF part export completed: " + finalPackage.WindowsPackageDirectory);
+                TryCopyLogFile(finalPackage);
                 return true;
             }
             catch (Exception e)
@@ -483,6 +492,7 @@ namespace SW2URDF.URDFExport
                     URDFRobot = sourceRobot;
                 }
                 RestoreExportState(preferencesSaved, false, null, false);
+                CleanupExportTransaction(transaction);
             }
         }
 
@@ -526,6 +536,8 @@ namespace SW2URDF.URDFExport
 
         private void WriteRobotFile(URDFPackage package)
         {
+            // Localization can change numeric values after the initial preflight.
+            ExportValidation.Validate(URDFRobot, PackageName, SavePath);
             URDFWriter writer = new URDFWriter(
                 Path.Combine(package.WindowsRobotsDirectory, URDFRobot.Name + ".urdf"));
             using (writer.writer)
@@ -538,7 +550,21 @@ namespace SW2URDF.URDFExport
         {
             logger.Error("URDF export failed", error);
             MessageBox.Show("URDF export failed:\n" + error.Message +
-                "\nThe package may be incomplete. Log file: " + Logger.GetFileName());
+                "\nLog file: " + Logger.GetFileName());
+        }
+
+        private static void CleanupExportTransaction(PackageExportTransaction transaction)
+        {
+            if (transaction == null)
+            {
+                return;
+            }
+            transaction.Dispose();
+            if (!String.IsNullOrEmpty(transaction.CleanupWarning))
+            {
+                logger.Warn(transaction.CleanupWarning);
+                MessageBox.Show(transaction.CleanupWarning);
+            }
         }
 
         private void RestoreExportState(bool preferencesSaved, bool visibilityChanged,

@@ -97,6 +97,11 @@ namespace SW2URDF.URDFExport
             {
                 throw new ArgumentException("The child list is missing for link " + link.Name);
             }
+            link.ValidateValues(link.Name);
+            if (link.Inertial != null && link.Inertial.Mass.ElementContainsData() && link.Inertial.Mass.Value < 0)
+            {
+                throw new ArgumentException("Mass cannot be negative for link " + link.Name);
+            }
             if (parent != null)
             {
                 Joint joint = link.Joint;
@@ -117,6 +122,7 @@ namespace SW2URDF.URDFExport
                 {
                     throw new ArgumentException("Joint " + joint.Name + " must connect " + parent.Name + " to " + link.Name + ".");
                 }
+                ValidateJointValues(joint);
             }
             else if (link.Joint != null && link.Joint.ElementContainsData())
             {
@@ -156,6 +162,37 @@ namespace SW2URDF.URDFExport
             foreach (Link child in link.Children)
             {
                 ValidateLink(child, link, visited, names, meshNames, joints, textures);
+            }
+        }
+
+        private static void ValidateJointValues(Joint joint)
+        {
+            if (joint.Type == "revolute" || joint.Type == "continuous" ||
+                joint.Type == "prismatic" || joint.Type == "planar")
+            {
+                if (!joint.Axis.AreRequiredFieldsSatisfied())
+                {
+                    throw new ArgumentException("Joint " + joint.Name + " is missing its axis.");
+                }
+                double[] axis = joint.Axis.GetXYZ();
+                if (axis[0] == 0 && axis[1] == 0 && axis[2] == 0)
+                {
+                    throw new ArgumentException("Joint " + joint.Name + " needs a non-zero axis.");
+                }
+            }
+            // Missing limit fields are reported by the required-field check.
+            joint.AreRequiredFieldsSatisfied();
+            if (joint.Limit.ElementContainsData() && joint.Limit.AreRequiredFieldsSatisfied())
+            {
+                if ((joint.Type == "revolute" || joint.Type == "prismatic") &&
+                    joint.Limit.Lower > joint.Limit.Upper)
+                {
+                    throw new ArgumentException("Joint " + joint.Name + " has a lower limit greater than its upper limit.");
+                }
+                if (joint.Limit.Effort < 0 || joint.Limit.Velocity < 0)
+                {
+                    throw new ArgumentException("Joint " + joint.Name + " effort and velocity limits cannot be negative.");
+                }
             }
         }
     }

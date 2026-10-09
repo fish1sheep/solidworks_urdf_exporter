@@ -13,7 +13,7 @@ namespace SW2URDF.URDF
         public static readonly NumberFormatInfo URDFNumberFormat =
             CultureInfo.CreateSpecificCulture("en-US").NumberFormat;
 
-        public static readonly NumberStyles URDFNumberStyle = NumberStyles.Any;
+        public static readonly NumberStyles URDFNumberStyle = NumberStyles.Float;
 
         [DataMember]
         private bool IsRequired;
@@ -33,6 +33,15 @@ namespace SW2URDF.URDF
 
         public void WriteURDF(XmlWriter writer)
         {
+            if (Value == null)
+            {
+                if (IsRequired)
+                {
+                    throw new InvalidOperationException("Required attribute " + AttributeType + " has null value");
+                }
+                return;
+            }
+            ValidateValue(AttributeType);
             string valueString = "";
             if (Value.GetType() == typeof(double[]))
             {
@@ -57,10 +66,6 @@ namespace SW2URDF.URDF
             {
                 throw new Exception("Unhandled object type in write attribute");
             }
-            if (IsRequired && Value == null)
-            {
-                throw new Exception("Required attribute " + AttributeType + " has null value");
-            }
             if (String.IsNullOrWhiteSpace(AttributeType))
             {
                 throw new Exception("No type specified");
@@ -73,6 +78,10 @@ namespace SW2URDF.URDF
 
         public void AppendToCSVDictionary(List<string> context, OrderedDictionary dictionary)
         {
+            if (Value == null)
+            {
+                return;
+            }
             if (Value.GetType() == typeof(double[]))
             {
                 double[] values = (double[])Value;
@@ -94,7 +103,113 @@ namespace SW2URDF.URDF
             string contextString = string.Join(".", context) + "." + AttributeType;
             if (dictionary.ContainsKey(contextString))
             {
-                Value = GetValueFromString(dictionary[contextString]);
+                string text = dictionary[contextString];
+                if (IsTextAttribute())
+                {
+                    Value = text;
+                }
+                else if (AttributeType == "xyz" || AttributeType == "rpy" || AttributeType == "rgba")
+                {
+                    string[] fields = text.Split(';');
+                    if (fields.Length != AttributeType.Length)
+                    {
+                        throw new FormatException("Invalid vector size for " + contextString);
+                    }
+                    double[] values = new double[fields.Length];
+                    for (int i = 0; i < values.Length; i++)
+                    {
+                        values[i] = ParseDouble(fields[i], contextString + "." + AttributeType[i]);
+                    }
+                    Value = values;
+                }
+                else
+                {
+                    Value = ParseDouble(text, contextString);
+                }
+            }
+            else if (AttributeType == "xyz" || AttributeType == "rpy" || AttributeType == "rgba")
+            {
+                // Arrays are represented by one CSV column per component.
+                double[] values = Value as double[];
+                if (values == null)
+                {
+                    values = new double[AttributeType.Length];
+                }
+                values = (double[])values.Clone();
+                bool found = false;
+                for (int i = 0; i < values.Length; i++)
+                {
+                    string key = contextString + "." + AttributeType[i];
+                    if (dictionary.ContainsKey(key))
+                    {
+                        values[i] = ParseDouble(dictionary[key], key);
+                        found = true;
+                    }
+                }
+                if (found)
+                {
+                    Value = values;
+                }
+            }
+        }
+
+        private bool IsTextAttribute()
+        {
+            return AttributeType == "name" || AttributeType == "type" ||
+                AttributeType == "filename" || AttributeType == "link" || AttributeType == "joint";
+        }
+
+        public static double ParseDouble(string text, string field)
+        {
+            if (!Double.TryParse(text, URDFNumberStyle, URDFNumberFormat, out double value) ||
+                Double.IsNaN(value) || Double.IsInfinity(value))
+            {
+                throw new FormatException("Invalid number for " + field + ": '" + text +
+                    "'. Use a finite number with a dot as the decimal separator.");
+            }
+            return value;
+        }
+
+        public void ValidateValue(string context)
+        {
+            if (Value == null)
+            {
+                return;
+            }
+            string field = context + "." + AttributeType;
+            if (IsTextAttribute())
+            {
+                if (!(Value is string))
+                {
+                    throw new ArgumentException("Expected text for " + field);
+                }
+                return;
+            }
+            if (AttributeType == "xyz" || AttributeType == "rpy" || AttributeType == "rgba")
+            {
+                double[] values = Value as double[];
+                if (values == null || values.Length != AttributeType.Length)
+                {
+                    throw new ArgumentException("Invalid vector size for " + field);
+                }
+                foreach (double value in values)
+                {
+                    ValidateFinite(value, field);
+                }
+                return;
+            }
+            if (!(Value is double))
+            {
+                throw new ArgumentException("Expected a number for " + field);
+            }
+            ValidateFinite((double)Value, field);
+        }
+
+        private static void ValidateFinite(double value, string field)
+        {
+            if (Double.IsNaN(value) || Double.IsInfinity(value))
+            {
+                throw new ArgumentException("A finite number is required for " + field);
             }
         }
 
@@ -111,18 +226,15 @@ namespace SW2URDF.URDF
                 double[] arry = new double[valueFields.Length];
                 for (int i = 0; i < valueFields.Length; i++)
                 {
-                    if (!Double.TryParse(valueFields[i], out resultDouble))
-                    {
-                        throw new Exception("Parsing failed for CSV field " + valueStr);
-                    }
-                    arry[i] = resultDouble;
+                    arry[i] = ParseDouble(valueFields[i], "CSV field");
                 }
                 return arry;
             }
             else
             {
-                if (Double.TryParse(valueStr, out resultDouble))
+                if (Double.TryParse(valueStr, URDFNumberStyle, URDFNumberFormat, out resultDouble))
                 {
+                    ValidateFinite(resultDouble, "CSV field");
                     return resultDouble;
                 }
             }
@@ -172,14 +284,12 @@ namespace SW2URDF.URDF
 
         public void SetDoubleValueFromString(string text)
         {
-            if (Double.TryParse(text, URDFNumberStyle, URDFNumberFormat, out double result))
+            if (String.IsNullOrWhiteSpace(text))
             {
-                Value = result;
+                Value = null;
+                return;
             }
-            else if (GetIsRequired())
-            {
-                Value = 0.0;
-            }
+            Value = ParseDouble(text, AttributeType);
         }
 
         public void SetDoubleArrayFromStringArray(string[] textArray)
@@ -187,14 +297,7 @@ namespace SW2URDF.URDF
             double[] dArray = new double[textArray.Length];
             for (int i = 0; i < textArray.Length; i++)
             {
-                if (Double.TryParse(textArray[i], URDFNumberStyle, URDFNumberFormat, out double result))
-                {
-                    dArray[i] = result;
-                }
-                else if (GetIsRequired())
-                {
-                    dArray[i] = 0.0;
-                }
+                dArray[i] = ParseDouble(textArray[i], AttributeType + "." + i);
             }
             Value = dArray;
         }

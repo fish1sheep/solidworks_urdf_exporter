@@ -52,10 +52,6 @@ namespace SW2URDF.UI
 
         public AssemblyExportForm(SldWorks SwApp, LinkNode node, ExportHelper exporter)
         {
-            Application.ThreadException +=
-                new ThreadExceptionEventHandler(ExceptionHandler);
-            AppDomain.CurrentDomain.UnhandledException +=
-                new UnhandledExceptionEventHandler(UnhandledException);
             InitializeComponent();
             swApp = SwApp;
             BaseNode = node;
@@ -119,6 +115,20 @@ namespace SW2URDF.UI
             saveConfigurationAttributeDef.AddParameter(
                 "exporterVersion", (int)swParamType_e.swParamTypeDouble, 1.0, Options);
             saveConfigurationAttributeDef.Register();
+            Application.ThreadException += ExceptionHandler;
+            AppDomain.CurrentDomain.UnhandledException += UnhandledException;
+        }
+
+        private void DetachExceptionHandlers()
+        {
+            Application.ThreadException -= ExceptionHandler;
+            AppDomain.CurrentDomain.UnhandledException -= UnhandledException;
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            DetachExceptionHandlers();
+            base.OnFormClosed(e);
         }
 
         private void ExceptionHandler(object sender, ThreadExceptionEventArgs e)
@@ -250,15 +260,31 @@ namespace SW2URDF.UI
 
         private void FinishExport(bool exportSTL)
         {
-            logger.Info("Completing URDF export");
-            SaveConfigTree(ActiveSWModel, BaseNode, false);
+            try
+            {
+                FinishExportCore(exportSTL);
+            }
+            catch (FormatException error)
+            {
+                MessageBox.Show(error.Message, "Invalid URDF value");
+            }
+            catch (ArgumentException error)
+            {
+                MessageBox.Show(error.Message, "Invalid export input");
+            }
+        }
 
+        private void FinishExportCore(bool exportSTL)
+        {
+            logger.Info("Completing URDF export");
             // Saving selected node
             LinkNode node = (LinkNode)treeViewLinkProperties.SelectedNode;
             if (node != null)
             {
                 SaveLinkDataFromPropertyBoxes(node.Link);
             }
+
+            SaveConfigTree(ActiveSWModel, BaseNode, false);
 
             Exporter.URDFRobot = CreateRobotFromTreeView(treeViewLinkProperties);
 
@@ -457,9 +483,9 @@ namespace SW2URDF.UI
                 {
                     double[] Axis = Exporter.EstimateAxis(comboBoxAxis.Text);
                     Axis = Exporter.LocalizeAxis(Axis, comboBoxOrigin.Text);
-                    textBoxAxisX.Text = Axis[0].ToString("G5");
-                    textBoxAxisY.Text = Axis[1].ToString("G5");
-                    textBoxAxisZ.Text = Axis[2].ToString("G5");
+                    textBoxAxisX.Text = Axis[0].ToString("G5", URDFAttribute.URDFNumberFormat);
+                    textBoxAxisY.Text = Axis[1].ToString("G5", URDFAttribute.URDFNumberFormat);
+                    textBoxAxisZ.Text = Axis[2].ToString("G5", URDFAttribute.URDFNumberFormat);
                 }
             }
         }

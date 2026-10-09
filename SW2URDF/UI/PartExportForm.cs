@@ -76,6 +76,22 @@ namespace SW2URDF.UI
 
         private void ButtonFinishClick(object sender, EventArgs e)
         {
+            try
+            {
+                FinishExport();
+            }
+            catch (FormatException error)
+            {
+                MessageBox.Show(error.Message, "Invalid URDF value");
+            }
+            catch (ArgumentException error)
+            {
+                MessageBox.Show(error.Message, "Invalid export input");
+            }
+        }
+
+        private void FinishExport()
+        {
             Exporter.PackageName = Path.GetFileName(textBox_save_as.Text);
             Exporter.SavePath = Path.GetDirectoryName(textBox_save_as.Text);
             Exporter.URDFRobot.BaseLink.Name = Exporter.PackageName;

@@ -1,7 +1,12 @@
 using SW2URDF.URDF;
 using SW2URDF.URDFExport;
+using SW2URDF.URDFExport.CSV;
 using System;
+using System.Globalization;
 using System.IO;
+using System.Reflection;
+using System.Text;
+using System.Threading;
 using System.Xml;
 using Xunit;
 
@@ -98,6 +103,142 @@ namespace SW2URDF.Test
             Assert.Same(copy, copy.Children[0].Parent);
             copy.Children[0].Name = "renamed_arm";
             Assert.Equal("arm", child.Name);
+        }
+
+        [Fact]
+        public void ConfigurationRoundTripPreservesUnicodeNames()
+        {
+            LinkNode node = new LinkNode(new Link { Name = "机械臂底座" });
+            Type type = typeof(ConfigurationSerialization);
+            BindingFlags flags = BindingFlags.NonPublic | BindingFlags.Static;
+            string data = (string)type.GetMethod("SerializeToString", flags).Invoke(null, new object[] { node });
+            LinkNode loaded = (LinkNode)type.GetMethod("DeserializeFromString", flags)
+                .Invoke(null, new object[] { data });
+            Assert.Equal(node.Name, loaded.Link.Name);
+        }
+
+        [Theory]
+        [InlineData("001")]
+        [InlineData("1;2")]
+        public void CsvRoundTripKeepsTextNamesAndDotDecimals(string name)
+        {
+            CultureInfo originalCulture = Thread.CurrentThread.CurrentCulture;
+            string file = Path.Combine(Path.GetTempPath(), "sw2urdf-csv-" + Guid.NewGuid().ToString("N") + ".csv");
+            try
+            {
+                Thread.CurrentThread.CurrentCulture = new CultureInfo("de-DE");
+                Robot robot = CreateRobot();
+                robot.BaseLink.Name = name;
+                robot.BaseLink.Inertial.Mass.Value = 1.25;
+                robot.BaseLink.Visual.Material.Color.Red = 0.25;
+                ImportExport.WriteRobotToCSV(robot, file);
+                using (Stream stream = File.OpenRead(file))
+                {
+                    Link loaded = ImportExport.LoadURDFRobotFromCSV(stream)[0];
+                    Assert.Equal(name, loaded.Name);
+                    Assert.Equal(1.25, loaded.Inertial.Mass.Value);
+                    Assert.Equal(0.25, loaded.Visual.Material.Color.Red);
+                }
+            }
+            finally
+            {
+                Thread.CurrentThread.CurrentCulture = originalCulture;
+                File.Delete(file);
+            }
+        }
+
+        [Theory]
+        [InlineData("NaN")]
+        [InlineData("Infinity")]
+        [InlineData("oops")]
+        public void InvalidCsvNumbersIdentifyTheRowAndField(string number)
+        {
+            using (Stream stream = new MemoryStream(Encoding.UTF8.GetBytes("Link Name,Mass\nbase_link," + number + "\n")))
+            {
+                InvalidDataException error = Assert.Throws<InvalidDataException>(() => ImportExport.LoadURDFRobotFromCSV(stream));
+                Assert.Contains("row 2", error.Message);
+                Assert.Contains("Mass.value", error.Message);
+            }
+        }
+
+        [Fact]
+        public void NonFiniteNumbersAndInvalidJointGeometryAreRejected()
+        {
+            Robot robot = CreateRobot();
+            robot.BaseLink.Inertial.Mass.Value = Double.NaN;
+            Assert.Throws<ArgumentException>(() => ExportValidation.Validate(robot, "test_robot", Path.GetTempPath()));
+            robot.BaseLink.Inertial.Mass.Value = 0;
+            Link child = CreateChild(robot.BaseLink, "arm", "joint_1");
+            child.Joint.Type = "revolute";
+            child.Joint.Axis.X = 1;
+            child.Joint.Limit.Lower = 2;
+            child.Joint.Limit.Upper = 1;
+            child.Joint.Limit.Effort = 1;
+            child.Joint.Limit.Velocity = 1;
+            robot.BaseLink.Children.Add(child);
+            Assert.Contains("lower limit", Assert.Throws<ArgumentException>(() =>
+                ExportValidation.Validate(robot, "test_robot", Path.GetTempPath())).Message);
+            child.Joint.Limit.Lower = 0;
+            child.Joint.Axis.X = 0;
+            Assert.Contains("non-zero axis", Assert.Throws<ArgumentException>(() =>
+                ExportValidation.Validate(robot, "test_robot", Path.GetTempPath())).Message);
+        }
+
+        [Fact]
+        public void FailedAndCancelledExportsPreserveThePreviousPackage()
+        {
+            string directory = Path.Combine(Path.GetTempPath(), "sw2urdf-rollback-" + Guid.NewGuid().ToString("N"));
+            string target = Path.Combine(directory, "test_robot");
+            try
+            {
+                Directory.CreateDirectory(target);
+                string previousFile = Path.Combine(target, "previous.txt");
+                File.WriteAllText(previousFile, "previous package");
+                using (PackageExportTransaction export = new PackageExportTransaction("test_robot", directory))
+                {
+                    File.WriteAllText(Path.Combine(export.Package.WindowsPackageDirectory, "previous.txt"), "partial package");
+                }
+                Assert.Equal("previous package", File.ReadAllText(previousFile));
+                using (PackageExportTransaction export = new PackageExportTransaction("test_robot", directory))
+                {
+                    // Force installation to fail after the previous package has been moved to its backup.
+                    Directory.Move(export.Package.WindowsPackageDirectory.TrimEnd(Path.DirectorySeparatorChar),
+                        Path.Combine(directory, "unavailable"));
+                    Assert.ThrowsAny<IOException>(() => export.Commit());
+                }
+                Assert.Equal("previous package", File.ReadAllText(previousFile));
+                Assert.Empty(Directory.GetDirectories(directory, ".sw2urdf-*"));
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        [Fact]
+        public void SuccessfulExportKeepsExistingResourcesAndInstallsTheNewPackage()
+        {
+            string directory = Path.Combine(Path.GetTempPath(), "sw2urdf-commit-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                string target = Path.Combine(directory, "test_robot");
+                Directory.CreateDirectory(Path.Combine(target, "meshes"));
+                File.WriteAllText(Path.Combine(target, "meshes", "existing.STL"), "mesh");
+                File.WriteAllText(Path.Combine(target, "robot.urdf"), "previous");
+                using (PackageExportTransaction export = new PackageExportTransaction("test_robot", directory))
+                {
+                    File.WriteAllText(Path.Combine(export.Package.WindowsPackageDirectory, "robot.urdf"), "new");
+                    Assert.Equal("previous", File.ReadAllText(Path.Combine(target, "robot.urdf")));
+                    export.Commit();
+                }
+                Assert.Equal("new", File.ReadAllText(Path.Combine(target, "robot.urdf")));
+                Assert.Equal("mesh", File.ReadAllText(Path.Combine(target, "meshes", "existing.STL")));
+                Assert.Empty(Directory.GetDirectories(directory, ".sw2urdf-*"));
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
         }
 
         private static Robot CreateRobot()

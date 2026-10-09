@@ -7,6 +7,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -45,35 +46,47 @@ namespace SW2URDF.URDFExport.CSV
         /// <returns></returns>
         public static List<Link> LoadURDFRobotFromCSV(Stream stream)
         {
-            List<StringDictionary> loadedFields = new List<StringDictionary>();
+            List<Link> loadedLinks = new List<Link>();
             using (TextFieldParser csvParser = new TextFieldParser(stream))
             {
                 csvParser.SetDelimiters(new string[] { "," });
 
                 string[] headers = csvParser.ReadFields();
+                if (headers == null || headers.Length == 0 ||
+                    headers.Any(string.IsNullOrWhiteSpace) ||
+                    headers.Distinct(StringComparer.OrdinalIgnoreCase).Count() != headers.Length)
+                {
+                    throw new InvalidDataException("CSV headers must be non-empty and unique.");
+                }
+                int row = 1;
                 while (!csvParser.EndOfData)
                 {
+                    row++;
                     string[] fields = csvParser.ReadFields();
                     StringDictionary dictionary = new StringDictionary();
                     
-                    int minArrayLength = Math.Min(fields.Length, headers.Length);
-                    if (fields.Length != headers.Length)
+                    if (fields == null || fields.Length != headers.Length)
                     {
-                        logger.Warn(string.Format(
-                            "The number of columns in the row do not match the number of columns in the header {0} != {1}",
-                            fields.Length, headers.Length));
+                        throw new InvalidDataException("CSV row " + row + " does not match the header column count.");
                     }
-                    for (int i = 0; i < minArrayLength; i++)
+                    for (int i = 0; i < headers.Length; i++)
                     {
                         if (!string.IsNullOrWhiteSpace(fields[i]))
                         {
                             dictionary[headers[i]] = fields[i];
                         }
                     }
-                    loadedFields.Add(dictionary);
+                    try
+                    {
+                        loadedLinks.Add(BuildLinkFromData(dictionary));
+                    }
+                    catch (FormatException error)
+                    {
+                        throw new InvalidDataException("CSV row " + row + ": " + error.Message, error);
+                    }
                 }
 
-                return loadedFields.Select(fields => BuildLinkFromData(fields)).ToList();
+                return loadedLinks;
             }
         }
 
@@ -108,7 +121,8 @@ namespace SW2URDF.URDFExport.CSV
                 if (dictionary.Contains(context))
                 {
                     object value = dictionary[context];
-                    writer.WriteField(value);
+                    writer.WriteField(value is double
+                        ? ((double)value).ToString("R", CultureInfo.InvariantCulture) : value);
                 }
                 else
                 {

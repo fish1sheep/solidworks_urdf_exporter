@@ -87,6 +87,26 @@ namespace SW2URDF.URDF
             writer.WriteEndElement();
         }
 
+        public void ValidateValues(string context)
+        {
+            string current = context + "." + ElementName;
+            foreach (URDFAttribute attribute in Attributes)
+            {
+                attribute.ValidateValue(current);
+            }
+            foreach (URDFElement child in ChildElements)
+            {
+                if (child == null)
+                {
+                    throw new ArgumentException("Missing element under " + current);
+                }
+                if (child.ElementContainsData())
+                {
+                    child.ValidateValues(current);
+                }
+            }
+        }
+
         public virtual void AppendToCSVDictionary(List<string> context, OrderedDictionary dictionary)
         {
             string typeName = GetType().Name;

@@ -57,29 +57,35 @@ namespace SW2URDF.URDFExport
         /// <returns>TreeView LinkNode loaded from configuration</returns>
         public static LinkNode LoadBaseNodeFromModel(ModelDoc2 model, out bool error)
         {
-            string data = GetConfigTreeData(model, out double configVersion);
-
-            LinkNode basenode;
-            if (configVersion > SerializationVersion)
+            error = false;
+            try
             {
-                MessageBox.Show("The configuration saved in this model is newer than what this " +
-                    "exporter supports " + string.Format("({0} > {1})", configVersion, SerializationVersion) +
-                    ". Please update your exporter version");
+                string data = GetConfigTreeData(model, out double configVersion, out bool found);
+                if (!found)
+                {
+                    return null;
+                }
+                if (configVersion > SerializationVersion)
+                {
+                    throw new InvalidDataException("The saved configuration is newer than this exporter " +
+                        string.Format("({0} > {1}). Please update your exporter.", configVersion, SerializationVersion));
+                }
+                LinkNode baseNode = configVersion >= MinDataContractVersion
+                    ? DeserializeFromString(data) : LoadConfigFromStringXML(data);
+                if (baseNode == null)
+                {
+                    throw new InvalidDataException("The saved URDF configuration is empty or could not be read.");
+                }
+                return baseNode;
+            }
+            catch (Exception e)
+            {
                 error = true;
+                logger.Error("Could not load the saved URDF configuration", e);
+                MessageBox.Show("Could not load the saved URDF configuration:\n" + e.Message +
+                    "\nThe existing configuration has been preserved. Log file: " + Logger.GetFileName());
                 return null;
             }
-
-            if (configVersion >= MinDataContractVersion)
-            {
-                basenode = DeserializeFromString(data);
-            }
-            else
-            {
-                basenode = LoadConfigFromStringXML(data);
-            }
-
-            error = false;
-            return basenode;
         }
 
         /// <summary>
@@ -165,7 +171,7 @@ namespace SW2URDF.URDFExport
                 {
                     ser.WriteObject(stream, link);
                     stream.Flush();
-                    data = Encoding.ASCII.GetString(stream.GetBuffer(), 0, (int)stream.Position);
+                    data = Encoding.UTF8.GetString(stream.GetBuffer(), 0, (int)stream.Position);
                 }
                 catch (SerializationException e)
                 {
@@ -185,7 +191,7 @@ namespace SW2URDF.URDFExport
             LinkNode baseNode = null;
             if (!string.IsNullOrWhiteSpace(data))
             {
-                using (MemoryStream stream = new MemoryStream(Encoding.ASCII.GetBytes(data)))
+                using (MemoryStream stream = new MemoryStream(Encoding.UTF8.GetBytes(data)))
                 {
                     DataContractSerializer ser =
                         new DataContractSerializer(typeof(Link));
@@ -219,13 +225,12 @@ namespace SW2URDF.URDFExport
             if (!string.IsNullOrWhiteSpace(data))
             {
                 XmlSerializer serializer = new XmlSerializer(typeof(SerialNode));
-                XmlTextReader textReader = new XmlTextReader(new StringReader(data));
-                // Not reading external files, so this can set to prohibit. Resolves CA3075
-                textReader.DtdProcessing = DtdProcessing.Prohibit;
-                SerialNode sNode = (SerialNode)serializer.Deserialize(textReader);
-                textReader.Close();
-
-                baseNode = sNode.BuildLinkNodeFromSerialNode();
+                using (XmlTextReader textReader = new XmlTextReader(new StringReader(data)))
+                {
+                    textReader.DtdProcessing = DtdProcessing.Prohibit;
+                    SerialNode sNode = (SerialNode)serializer.Deserialize(textReader);
+                    baseNode = sNode.BuildLinkNodeFromSerialNode();
+                }
             }
             return baseNode;
         }
@@ -256,8 +261,14 @@ namespace SW2URDF.URDFExport
         /// <returns>Serialized data string</returns>
         private static string GetConfigTreeData(ModelDoc2 model, out double version)
         {
+            return GetConfigTreeData(model, out version, out bool found);
+        }
+
+        private static string GetConfigTreeData(ModelDoc2 model, out double version, out bool found)
+        {
             string data = "";
             version = 0.0;
+            found = false;
 
             // Check for most recent serialization version
             SolidWorks.Interop.sldworks.Attribute swAtt =
@@ -271,11 +282,20 @@ namespace SW2URDF.URDFExport
 
             if (swAtt != null)
             {
+                found = true;
                 Parameter param = swAtt.GetParameter("data");
+                if (param == null)
+                {
+                    throw new InvalidDataException("The URDF configuration has no data parameter.");
+                }
                 data = param.GetStringValue();
                 logger.Info("URDF Configuration found\n" + data);
 
                 param = swAtt.GetParameter("exporterVersion");
+                if (param == null)
+                {
+                    throw new InvalidDataException("The URDF configuration has no version parameter.");
+                }
                 version = param.GetDoubleValue();
             }
 

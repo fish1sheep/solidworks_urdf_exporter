@@ -292,9 +292,12 @@ namespace SW2URDF.UI
                                 textBoxJointPitch,
                                 textBoxJointYaw);
 
-            Joint.Axis.Update(textBoxAxisX,
-                              textBoxAxisY,
-                              textBoxAxisZ);
+            if (Joint.Type != "fixed" && Joint.Type != "floating")
+            {
+                Joint.Axis.Update(textBoxAxisX,
+                                  textBoxAxisY,
+                                  textBoxAxisZ);
+            }
 
             Joint.Limit.SetRequired(Joint.Type == "revolute" || Joint.Type == "prismatic");
             Joint.Limit.SetValues(textBoxLimitLower,

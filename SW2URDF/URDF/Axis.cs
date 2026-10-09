@@ -90,11 +90,7 @@ namespace SW2URDF.URDF
                     continue;
                 }
 
-                object value = URDFAttribute.GetValueFromString(dictionary[lookupString]);
-                if (value != null && value.GetType() == typeof(double))
-                {
-                    xyz[i] = (double)value;
-                }
+                xyz[i] = URDFAttribute.ParseDouble(dictionary[lookupString], lookupString);
             }
 
             XYZAttribute.Value = xyz;

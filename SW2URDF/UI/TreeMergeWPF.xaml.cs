@@ -42,9 +42,8 @@ namespace SW2URDF.UI
 
         public TreeMergeWPF(Link existingLink, List<Link> loadedLinks, string csvFileName, string assemblyName)
         {
+            SelectedLinkProperties = new ObservableCollection<KeyValuePair<string, object>>();
             DataContext = this;
-            Resources["SelectedLinkProperties"] = SelectedLinkProperties;
-            Dispatcher.UnhandledException += AppDispatcherUnhandledException;
 
             CSVFileName = csvFileName;
             AssemblyName = assemblyName;
@@ -56,12 +55,20 @@ namespace SW2URDF.UI
             LoadedCSVLinks = new List<Link>(loadedLinks);
             LoadedCSVLinkNames = new HashSet<string>();
             TreeCorrespondance = new URDFTreeCorrespondance();
-            SelectedLinkProperties = new ObservableCollection<KeyValuePair<string, object>>();
+            Resources["SelectedLinkProperties"] = SelectedLinkProperties;
 
             PropertiesListView.DataContext = SelectedLinkProperties;
 
             ExistingTreeView.SelectedItemChanged += OnTreeItemClick;
             MergeAndUpdate();
+            Dispatcher.UnhandledException += AppDispatcherUnhandledException;
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            Dispatcher.UnhandledException -= AppDispatcherUnhandledException;
+            ExistingTreeView.SelectedItemChanged -= OnTreeItemClick;
+            base.OnClosed(e);
         }
 
         private void AppDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

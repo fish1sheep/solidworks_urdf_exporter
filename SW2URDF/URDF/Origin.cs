@@ -147,11 +147,7 @@ namespace SW2URDF.URDF
                     continue;
                 }
 
-                object value = URDFAttribute.GetValueFromString(dictionary[lookupString]);
-                if (value != null && value.GetType() == typeof(double))
-                {
-                    xyz[i] = (double)value;
-                }
+                xyz[i] = URDFAttribute.ParseDouble(dictionary[lookupString], lookupString);
             }
 
             contextString = string.Join(".", updatedContext) + ".rpy";
@@ -164,11 +160,7 @@ namespace SW2URDF.URDF
                     continue;
                 }
 
-                object value = URDFAttribute.GetValueFromString(dictionary[lookupString]);
-                if (value != null && value.GetType() == typeof(double))
-                {
-                    rpy[i] = (double)value;
-                }
+                rpy[i] = URDFAttribute.ParseDouble(dictionary[lookupString], lookupString);
             }
 
             XYZAttribute.Value = xyz;
