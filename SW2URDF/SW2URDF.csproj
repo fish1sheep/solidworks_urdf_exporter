@@ -325,6 +325,7 @@
     <Compile Include="Test\TestCommon.cs" />
     <Compile Include="Test\TestCSVImportExport.cs" />
     <Compile Include="Test\TestExportHelper.cs" />
+    <Compile Include="Test\TestExportResources.cs" />
     <Compile Include="Test\TestLogger.cs" />
     <Compile Include="Test\TestMathOps.cs" />
     <Compile Include="Test\TestPropertyManager.cs" />
@@ -361,6 +362,7 @@
     <Compile Include="URDFExport\CSV\CSVImportExport.cs" />
     <Compile Include="URDFExport\ConfigurationSerialization.cs" />
     <Compile Include="URDFExport\ExportHelper.cs" />
+    <Compile Include="URDFExport\ExportValidation.cs" />
     <Compile Include="URDFExport\ExportHelperExtension.cs" />
     <Compile Include="UI\AssemblyExportFormExtension.cs">
       <SubType>Form</SubType>

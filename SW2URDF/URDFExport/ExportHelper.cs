@@ -23,7 +23,6 @@ THE SOFTWARE.
 using MathNet.Numerics.LinearAlgebra;
 using SolidWorks.Interop.sldworks;
 using SolidWorks.Interop.swconst;
-using SW2URDF.ROS;
 using SW2URDF.URDF;
 using SW2URDF.URDFExport.CSV;
 using SW2URDF.Utilities;
@@ -57,6 +56,7 @@ namespace SW2URDF.URDFExport
         private bool mSTLPreview;
         private bool mTranslateToPositive;
         private bool mSaveComponentsIntoOneFile;
+        private string mExportCoordinateSystem;
         private int mSTLUnits;
         private int mSTLQuality;
         private double mHideTransitionSpeed;
@@ -101,7 +101,7 @@ namespace SW2URDF.URDFExport
             iSwApp.GetUserProgressBar(out progressBar);
 
             SavePath = System.Environment.ExpandEnvironmentVariables("%HOMEDRIVE%%HOMEPATH%");
-            PackageName = ActiveSWModel.GetTitle();
+            PackageName = ExportValidation.SuggestPackageName(ActiveSWModel.GetTitle());
 
             ReferenceCoordinateSystemNames = FindRefGeoNames("CoordSys");
             ReferenceAxesNames = FindRefGeoNames("RefAxis");
@@ -160,110 +160,63 @@ namespace SW2URDF.URDFExport
         /// </summary>
         /// <param name="exportSTL">Whether to export mesh files (default true)</param>
         /// <param name="meshFormat">Mesh export format (STL or 3DXML, default STL)</param>
-        public void ExportRobot(bool exportSTL = true, MeshExportFormat meshFormat = MeshExportFormat.STL)
+        public bool ExportRobot(bool exportSTL = true, MeshExportFormat meshFormat = MeshExportFormat.STL)
         {
-            // Initialize the progress bar
-            logger.Info("Beginning the export process");
-            int progressBarBound = CommonSwOperations.GetCount(URDFRobot.BaseLink);
-            iSwApp.GetUserProgressBar(out progressBar);
-            progressBar.Start(0, progressBarBound, "Creating package directories");
-
-            // Create package directory structure
-            logger.Info("Creating package directories with name " + PackageName + " and save path " + SavePath);
-            URDFPackage package = new URDFPackage(PackageName, SavePath);
-            package.CreateDirectories();
-            URDFRobot.Name = PackageName;
-            string windowsURDFFileName = package.WindowsRobotsDirectory + URDFRobot.Name + ".urdf";
-            string windowsCSVFileName = package.WindowsRobotsDirectory + URDFRobot.Name + ".csv";
-            string windowsPackageXMLFileName = package.WindowsPackageDirectory + "package.xml";
-
-            // Generate CMakeLists.txt (ament_cmake format)
-            logger.Info("Creating CMakeLists.txt at " + package.WindowsCMakeLists);
-            package.CreateCMakeLists();
-
-            // Generate joint name configuration YAML (ROS2-neutral format)
-            logger.Info("Creating joint names config at " + package.WindowsConfigYAML);
-            package.CreateConfigYAML(URDFRobot.GetJointNames(false));
-
-            // Generate default RViz2 configuration file
-            logger.Info("Creating default RViz config at " + package.WindowsRvizConfig);
-            package.CreateDefaultRvizConfig();
-
-            // Generate package.xml manifest (ROS2 format 3)
-            logger.Info("Creating package.xml at " + windowsPackageXMLFileName);
-            PackageXMLWriter packageXMLWriter = new PackageXMLWriter(windowsPackageXMLFileName);
-            PackageXML packageXML = new PackageXML(PackageName);
-            packageXML.WriteElement(packageXMLWriter);
-
-            // Generate display.launch.py (ROS2 Python launch file)
-            Rviz rviz = new Rviz(PackageName, URDFRobot.Name + ".urdf");
-            logger.Info("Creating RVIZ launch file in " + package.WindowsLaunchDirectory);
-            rviz.WriteFiles(package.WindowsLaunchDirectory);
-
-            // Generate Gazebo launch file (currently a placeholder)
-            Gazebo gazebo = new Gazebo(URDFRobot.Name, PackageName, URDFRobot.Name + ".urdf");
-            logger.Info("Creating Gazebo launch file in " + package.WindowsLaunchDirectory);
-            gazebo.WriteFile(package.WindowsLaunchDirectory);
-
-            // Save user's STL preferences, then apply export-required settings
-            logger.Info("Saving existing STL preferences");
-            SaveUserPreferences();
-
-            logger.Info("Modifying STL preferences");
-            SetSTLExportPreferences();
-
-            // Hide all components, then export mesh files for each link individually
-            AssemblyDoc assyDoc = (AssemblyDoc)ActiveSWModel;
-            List<string> hiddenComponents = CommonSwOperations.FindHiddenComponents(assyDoc.GetComponents(false));
-            logger.Info("Found " + hiddenComponents.Count + " hidden components " + String.Join(", ", hiddenComponents));
-            logger.Info("Hiding all components");
-            ActiveSWModel.Extension.SelectAll();
-            ActiveSWModel.HideComponent2();
-
-            bool success = false;
+            Robot sourceRobot = URDFRobot;
+            bool exportSucceeded = false;
+            bool preferencesSaved = false;
+            bool visibilityChanged = false;
+            bool progressStarted = false;
+            List<string> hiddenComponents = null;
             try
             {
-                logger.Info("Beginning individual files export");
-                ExportFiles(URDFRobot.BaseLink, package, 0, exportSTL, meshFormat);
-                success = true;
+                ExportValidation.Validate(URDFRobot, PackageName, SavePath);
+                URDFRobot = CreateExportCopy(sourceRobot);
+                URDFPackage package = new URDFPackage(PackageName, SavePath);
+
+                iSwApp.GetUserProgressBar(out progressBar);
+                if (progressBar != null)
+                {
+                    progressStarted = true;
+                    progressBar.Start(0, CommonSwOperations.GetCount(URDFRobot.BaseLink), "Creating package directories");
+                }
+                package.CreatePackageFiles(URDFRobot);
+
+                if (exportSTL)
+                {
+                    AssemblyDoc assyDoc = (AssemblyDoc)ActiveSWModel;
+                    hiddenComponents = CommonSwOperations.FindHiddenComponents(assyDoc.GetComponents(false));
+                    SaveUserPreferences();
+                    preferencesSaved = true;
+                    SetSTLExportPreferences();
+                    visibilityChanged = true;
+                    ActiveSWModel.Extension.SelectAll();
+                    ActiveSWModel.HideComponent2();
+                }
+
+                int count = 0;
+                ExportFiles(URDFRobot.BaseLink, package, ref count, exportSTL, meshFormat);
+                WriteRobotFile(package);
+                ImportExport.WriteRobotToCSV(URDFRobot,
+                    Path.Combine(package.WindowsRobotsDirectory, URDFRobot.Name + ".csv"));
+                TryCopyLogFile(package);
+                logger.Info("URDF package export completed: " + package.WindowsPackageDirectory);
+                exportSucceeded = true;
+                return true;
             }
             catch (Exception e)
             {
-                logger.Error("An exception was thrown attempting to export the URDF", e);
+                ReportExportFailure(e);
+                return false;
             }
             finally
             {
-                // Restore component visibility (previously hidden components stay hidden)
-                logger.Info("Showing all components except previously hidden components");
-                CommonSwOperations.ShowAllComponents(ActiveSWModel, hiddenComponents);
-
-                logger.Info("Resetting STL preferences");
-                ResetUserPreferences();
+                if (!exportSucceeded)
+                {
+                    URDFRobot = sourceRobot;
+                }
+                RestoreExportState(preferencesSaved, visibilityChanged, hiddenComponents, progressStarted);
             }
-
-            if (!success)
-            {
-                MessageBox.Show("Exporting the URDF failed unexpectedly. Email your maintainer " +
-                    "with the log file found at " + Logger.GetFileName());
-                return;
-            }
-
-            // Write the URDF model to XML file
-            logger.Info("Writing URDF file to " + windowsURDFFileName);
-            URDFWriter uWriter = new URDFWriter(windowsURDFFileName);
-            URDFRobot.WriteURDF(uWriter.writer);
-
-            // Export CSV data file (for batch property editing)
-            ImportExport.WriteRobotToCSV(URDFRobot, windowsCSVFileName);
-
-            // Copy log file to the package directory
-            logger.Info("Copying log file");
-            CopyLogFile(package);
-
-            // Restore user's original STL preferences
-            logger.Info("Resetting STL preferences");
-            ResetUserPreferences();
-            progressBar.End();
         }
 
         public List<string> GetJointNames()
@@ -272,35 +225,26 @@ namespace SW2URDF.URDFExport
         }
 
         //Recursive method for exporting each link (and writing it to the URDF)
-        private void ExportFiles(Link link, URDFPackage package, int count, bool exportSTL = true, MeshExportFormat meshFormat = MeshExportFormat.STL)
+        private void ExportFiles(Link link, URDFPackage package, ref int count, bool exportSTL = true, MeshExportFormat meshFormat = MeshExportFormat.STL)
         {
-            progressBar.UpdateProgress(count);
-            progressBar.UpdateTitle("Exporting mesh: " + link.Name);
+            if (progressBar != null)
+            {
+                progressBar.UpdateProgress(count++);
+                progressBar.UpdateTitle("Exporting mesh: " + link.Name);
+            }
             logger.Info("Exporting link: " + link.Name);
             // Iterate through each child and export its files
             logger.Info("Link " + link.Name + " has " + link.Children.Count + " children");
             foreach (Link child in link.Children)
             {
-                count += 1;
-                if (!child.isFixedFrame)
-                {
-                    ExportFiles(child, package, count, exportSTL, meshFormat);
-                }
+                ExportFiles(child, package, ref count, exportSTL, meshFormat);
             }
-
-            // Copy the texture file (if it was specified) to the textures directory
-            if (!link.isFixedFrame && !String.IsNullOrWhiteSpace(link.Visual.Material.Texture.wFilename))
+            // Fixed frames have no mesh, but their descendants still need exporting.
+            if (link.isFixedFrame)
             {
-                if (File.Exists(link.Visual.Material.Texture.wFilename))
-                {
-                    link.Visual.Material.Texture.Filename =
-
-                        package.TexturesDirectory + Path.GetFileName(link.Visual.Material.Texture.wFilename);
-                    string textureSavePath =
-                        package.WindowsTexturesDirectory + Path.GetFileName(link.Visual.Material.Texture.wFilename);
-                    File.Copy(link.Visual.Material.Texture.wFilename, textureSavePath, true);
-                }
+                return;
             }
+            CopyTexture(link, package);
 
             // Build package:// URI and Windows absolute path for the mesh file.
             // SolidWorks uses '/' as a component name separator — replace with '_'
@@ -327,7 +271,10 @@ namespace SW2URDF.URDFExport
                 switch (meshFormat)
                 {
                     case MeshExportFormat.STL:
-                        SaveSTL(link, windowsMeshFileName);
+                        if (!SaveSTL(link, windowsMeshFileName))
+                        {
+                            throw new IOException("Could not prepare the STL mesh for link " + link.Name);
+                        }
                         break;
 
                     case MeshExportFormat.THREEDXML:
@@ -335,7 +282,10 @@ namespace SW2URDF.URDFExport
                         break;
 
                     default:
-                        SaveSTL(link, windowsMeshFileName);
+                        if (!SaveSTL(link, windowsMeshFileName))
+                        {
+                            throw new IOException("Could not prepare the STL mesh for link " + link.Name);
+                        }
                         break;
                 }
             }
@@ -423,14 +373,9 @@ namespace SW2URDF.URDFExport
             }
             // === 3dxml Localize Link === //
 
-            ActiveDoc.Extension.SaveAs(windowsMeshFilename,
+            bool saved = ActiveDoc.Extension.SaveAs(windowsMeshFilename,
                 (int)swSaveAsVersion_e.swSaveAsCurrentVersion, saveOptions, null, ref errors, ref warnings);
-
-            if (errors + warnings != 0)
-            {
-                logger.Warn("Exporting 3dxml for link " + link.Name + " failed with error " + errors +
-                    " or warnings " + warnings);
-            }
+            EnsureMeshSaved(saved, errors, warnings, link.Name, windowsMeshFilename);
             CommonSwOperations.HideComponents(ActiveSWModel, link.SWComponents);
         }
 
@@ -455,13 +400,9 @@ namespace SW2URDF.URDFExport
             SetLinkSpecificSTLPreferences(names["geo"], link.STLQualityFine, ActiveDoc);
 
             logger.Info("Saving STL to " + windowsMeshFilename);
-            ActiveDoc.Extension.SaveAs(windowsMeshFilename,
+            bool saved = ActiveDoc.Extension.SaveAs(windowsMeshFilename,
                 (int)swSaveAsVersion_e.swSaveAsCurrentVersion, saveOptions, null, ref errors, ref warnings);
-            if (errors + warnings != 0)
-            {
-                logger.Warn("Exporting STL for link " + link.Name + " failed with error " + errors + 
-                    " or warnings " + warnings);
-            }
+            EnsureMeshSaved(saved, errors, warnings, link.Name, windowsMeshFilename);
             CommonSwOperations.HideComponents(ActiveSWModel, link.SWComponents);
 
             bool success = CorrectSTLMesh(windowsMeshFilename);
@@ -481,61 +422,173 @@ namespace SW2URDF.URDFExport
         /// consistent with the assembly export, using ROS2 package.xml (not legacy manifest.xml).
         /// </summary>
         /// <param name="zIsUp">Whether Z is up (true applies a coordinate rotation for ROS convention)</param>
-        public void ExportLink(bool zIsUp)
+        public bool ExportLink(bool zIsUp)
         {
-            CreateBaseRefOrigin(zIsUp);
-            MathTransform coordSysTransform =
-                ActiveSWModel.Extension.GetCoordinateSystemTransformByName("Origin_global");
-            Matrix<double> GlobalTransform = MathOps.GetTransformation(coordSysTransform);
-
-            LocalizeLink(URDFRobot.BaseLink, GlobalTransform);
-
-            // Create package directory structure
-            URDFPackage package = new URDFPackage(PackageName, SavePath);
-            package.CreateDirectories();
-
-            // Use package:// URI for mesh references in the URDF (consistent with ExportRobot)
-            string meshFileName = package.GetMeshPackageUri(URDFRobot.BaseLink.Name, ".STL");
-            string windowsMeshFileName = package.GetWindowsMeshPath(URDFRobot.BaseLink.Name, ".STL");
-            string windowsURDFFileName = package.WindowsRobotsDirectory + URDFRobot.Name + ".urdf";
-
-            // Create package.xml manifest (ROS2 format 3, not legacy manifest.xml)
-            string windowsPackageXMLFileName = package.WindowsPackageDirectory + "package.xml";
-            logger.Info("Creating package.xml at " + windowsPackageXMLFileName);
-            PackageXMLWriter packageXMLWriter = new PackageXMLWriter(windowsPackageXMLFileName);
-            PackageXML packageXML = new PackageXML(URDFRobot.Name);
-            packageXML.WriteElement(packageXMLWriter);
-
-            // Save user's STL preferences, then apply export-required settings
-            SaveUserPreferences();
-            SetSTLExportPreferences();
-            SetLinkSpecificSTLPreferences("", URDFRobot.BaseLink.STLQualityFine, ActiveSWModel);
-            int errors = 0;
-            int warnings = 0;
-
-            // Save the part as an STL mesh file
-            ActiveSWModel.Extension.SaveAs(windowsMeshFileName, (int)swSaveAsVersion_e.swSaveAsCurrentVersion,
-                (int)swSaveAsOptions_e.swSaveAsOptions_Silent, null, ref errors, ref warnings);
-
-            // Write the package:// URI into the URDF model
-            URDFRobot.BaseLink.Visual.Geometry.Mesh.Filename = meshFileName;
-            URDFRobot.BaseLink.Collision.Geometry.Mesh.Filename = meshFileName;
-
-            // Copy texture file to the package's textures directory
-            URDFRobot.BaseLink.Visual.Material.Texture.Filename =
-                package.TexturesDirectory + Path.GetFileName(URDFRobot.BaseLink.Visual.Material.Texture.wFilename);
-            string textureSavePath =
-                package.WindowsTexturesDirectory + Path.GetFileName(URDFRobot.BaseLink.Visual.Material.Texture.wFilename);
-            if (!String.IsNullOrWhiteSpace(URDFRobot.BaseLink.Visual.Material.Texture.wFilename))
+            Robot sourceRobot = URDFRobot;
+            bool exportSucceeded = false;
+            bool preferencesSaved = false;
+            try
             {
-                File.Copy(URDFRobot.BaseLink.Visual.Material.Texture.wFilename, textureSavePath, true);
+                ExportValidation.Validate(URDFRobot, PackageName, SavePath);
+                URDFRobot = CreateExportCopy(sourceRobot);
+                CreateBaseRefOrigin(zIsUp);
+                MathTransform coordSysTransform =
+                    ActiveSWModel.Extension.GetCoordinateSystemTransformByName("Origin_global");
+                if (coordSysTransform == null)
+                {
+                    throw new InvalidOperationException("Could not create the part export coordinate system.");
+                }
+                LocalizeLink(URDFRobot.BaseLink, MathOps.GetTransformation(coordSysTransform));
+
+                URDFPackage package = new URDFPackage(PackageName, SavePath);
+                package.CreatePackageFiles(URDFRobot);
+                Link link = URDFRobot.BaseLink;
+                string meshFileName = package.GetMeshPackageUri(link.Name, ".STL");
+                string windowsMeshFileName = package.GetWindowsMeshPath(link.Name, ".STL");
+
+                SaveUserPreferences();
+                preferencesSaved = true;
+                SetSTLExportPreferences();
+                SetLinkSpecificSTLPreferences("", link.STLQualityFine, ActiveSWModel);
+                int errors = 0;
+                int warnings = 0;
+                bool saved = ActiveSWModel.Extension.SaveAs(windowsMeshFileName,
+                    (int)swSaveAsVersion_e.swSaveAsCurrentVersion,
+                    (int)swSaveAsOptions_e.swSaveAsOptions_Silent |
+                    (int)swSaveAsOptions_e.swSaveAsOptions_Copy, null, ref errors, ref warnings);
+                EnsureMeshSaved(saved, errors, warnings, link.Name, windowsMeshFileName);
+                if (!CorrectSTLMesh(windowsMeshFileName))
+                {
+                    throw new IOException("Could not prepare the STL mesh for link " + link.Name);
+                }
+
+                link.Visual.Geometry.Mesh.Filename = meshFileName;
+                link.Collision.Geometry.Mesh.Filename = meshFileName;
+                CopyTexture(link, package);
+                WriteRobotFile(package);
+                TryCopyLogFile(package);
+                logger.Info("URDF part export completed: " + package.WindowsPackageDirectory);
+                exportSucceeded = true;
+                return true;
             }
+            catch (Exception e)
+            {
+                ReportExportFailure(e);
+                return false;
+            }
+            finally
+            {
+                if (!exportSucceeded)
+                {
+                    URDFRobot = sourceRobot;
+                }
+                RestoreExportState(preferencesSaved, false, null, false);
+            }
+        }
 
-            // Write the URDF model to XML file
-            URDFWriter uWriter = new URDFWriter(windowsURDFFileName);
-            URDFRobot.WriteURDF(uWriter.writer);
+        private Robot CreateExportCopy(Robot source)
+        {
+            Robot copy = new Robot { Name = PackageName };
+            copy.SetBaseLink(source.BaseLink.Clone());
+            return copy;
+        }
 
-            ResetUserPreferences();
+        private static void EnsureMeshSaved(bool saved, int errors, int warnings, string linkName, string filename)
+        {
+            if (!saved || errors != 0 || !File.Exists(filename) || new FileInfo(filename).Length == 0)
+            {
+                throw new IOException("Mesh export failed for link " + linkName +
+                    " (SolidWorks error " + errors + ", warnings " + warnings + "): " + filename);
+            }
+            if (warnings != 0)
+            {
+                logger.Warn("Mesh export warnings for link " + linkName + ": " + warnings);
+            }
+        }
+
+        private static void CopyTexture(Link link, URDFPackage package)
+        {
+            var texture = link.Visual.Material.Texture;
+            if (string.IsNullOrWhiteSpace(texture.wFilename))
+            {
+                texture.Filename = null;
+                return;
+            }
+            string textureName = Path.GetFileName(texture.wFilename);
+            string destination = Path.Combine(package.WindowsTexturesDirectory, textureName);
+            if (!string.Equals(Path.GetFullPath(texture.wFilename), Path.GetFullPath(destination),
+                StringComparison.OrdinalIgnoreCase))
+            {
+                File.Copy(texture.wFilename, destination, true);
+            }
+            texture.Filename = package.TexturesDirectory + textureName;
+        }
+
+        private void WriteRobotFile(URDFPackage package)
+        {
+            URDFWriter writer = new URDFWriter(
+                Path.Combine(package.WindowsRobotsDirectory, URDFRobot.Name + ".urdf"));
+            using (writer.writer)
+            {
+                URDFRobot.WriteURDF(writer.writer);
+            }
+        }
+
+        private static void ReportExportFailure(Exception error)
+        {
+            logger.Error("URDF export failed", error);
+            MessageBox.Show("URDF export failed:\n" + error.Message +
+                "\nThe package may be incomplete. Log file: " + Logger.GetFileName());
+        }
+
+        private void RestoreExportState(bool preferencesSaved, bool visibilityChanged,
+            List<string> hiddenComponents, bool progressStarted)
+        {
+            List<string> failures = new List<string>();
+            if (visibilityChanged)
+            {
+                TryRestore(() => CommonSwOperations.ShowAllComponents(ActiveSWModel, hiddenComponents),
+                    "component visibility", failures);
+            }
+            if (preferencesSaved)
+            {
+                TryRestore(ResetUserPreferences, "STL export settings", failures);
+            }
+            if (progressStarted)
+            {
+                TryRestore(() => progressBar.End(), "progress bar", failures);
+            }
+            if (failures.Count > 0)
+            {
+                MessageBox.Show("Could not restore the following SolidWorks state:\n" +
+                    string.Join("\n", failures) + "\nLog file: " + Logger.GetFileName());
+            }
+        }
+
+        private static void TryRestore(Action restore, string description, List<string> failures)
+        {
+            try
+            {
+                restore();
+            }
+            catch (Exception e)
+            {
+                logger.Error("Could not restore " + description, e);
+                failures.Add(description);
+            }
+        }
+
+        private static void TryCopyLogFile(URDFPackage package)
+        {
+            try
+            {
+                CopyLogFile(package);
+            }
+            catch (Exception e)
+            {
+                logger.Warn("URDF export completed, but the log file could not be copied", e);
+                MessageBox.Show("URDF export completed, but the log file could not be copied.\n" + e.Message);
+            }
         }
 
         //Writes an empty header to the STL to get rid of the BS that SolidWorks adds to a binary STL file
@@ -570,8 +623,7 @@ namespace SW2URDF.URDFExport
             {
                 if (!File.Exists(log_filename))
                 {
-                    System.Windows.Forms.MessageBox.Show("The log file was expected to be located at " + log_filename +
-                        ", but it was not found. Please contact your maintainer with this error message.");
+                    throw new FileNotFoundException("The export log file could not be found.", log_filename);
                 }
                 else
                 {
@@ -595,6 +647,9 @@ namespace SW2URDF.URDFExport
             mSTLPreview = iSwApp.GetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLPreview);
             mHideTransitionSpeed = iSwApp.GetUserPreferenceDoubleValue((int)swUserPreferenceDoubleValue_e.swViewTransitionHideShowComponent);
             mSaveComponentsIntoOneFile = iSwApp.GetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLComponentsIntoOneFile);
+            mExportCoordinateSystem = ActiveSWModel.Extension.GetUserPreferenceString(
+                (int)swUserPreferenceStringValue_e.swFileSaveAsCoordinateSystem,
+                (int)swUserPreferenceOption_e.swDetailingNoOptionSpecified);
         }
 
         //This is how the STL export preferences need to be to properly export
@@ -615,14 +670,42 @@ namespace SW2URDF.URDFExport
         private void ResetUserPreferences()
         {
             logger.Info("Returning STL preferences to user preferences");
-            iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLBinaryFormat, mBinary);
-            iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLDontTranslateToPositive, mTranslateToPositive);
-            iSwApp.SetUserPreferenceIntegerValue((int)swUserPreferenceIntegerValue_e.swExportStlUnits, mSTLUnits);
-            iSwApp.SetUserPreferenceIntegerValue((int)swUserPreferenceIntegerValue_e.swSTLQuality, mSTLQuality);
-            iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLShowInfoOnSave, mshowInfo);
-            iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLPreview, mSTLPreview);
-            iSwApp.SetUserPreferenceDoubleValue((int)swUserPreferenceDoubleValue_e.swViewTransitionHideShowComponent, mHideTransitionSpeed);
-            iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLComponentsIntoOneFile, mSaveComponentsIntoOneFile);
+            List<string> failures = new List<string>();
+            RestorePreference(() => iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLBinaryFormat, mBinary),
+                "binary STL format", failures);
+            RestorePreference(() => iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLDontTranslateToPositive, mTranslateToPositive),
+                "STL translation", failures);
+            RestorePreference(() => iSwApp.SetUserPreferenceIntegerValue((int)swUserPreferenceIntegerValue_e.swExportStlUnits, mSTLUnits),
+                "STL units", failures);
+            RestorePreference(() => iSwApp.SetUserPreferenceIntegerValue((int)swUserPreferenceIntegerValue_e.swSTLQuality, mSTLQuality),
+                "STL quality", failures);
+            RestorePreference(() => iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLShowInfoOnSave, mshowInfo),
+                "STL save information", failures);
+            RestorePreference(() => iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLPreview, mSTLPreview),
+                "STL preview", failures);
+            RestorePreference(() => iSwApp.SetUserPreferenceDoubleValue((int)swUserPreferenceDoubleValue_e.swViewTransitionHideShowComponent, mHideTransitionSpeed),
+                "component transition speed", failures);
+            RestorePreference(() => iSwApp.SetUserPreferenceToggle((int)swUserPreferenceToggle_e.swSTLComponentsIntoOneFile, mSaveComponentsIntoOneFile),
+                "STL component grouping", failures);
+            RestorePreference(() => ActiveSWModel.Extension.SetUserPreferenceString(
+                (int)swUserPreferenceStringValue_e.swFileSaveAsCoordinateSystem,
+                (int)swUserPreferenceOption_e.swDetailingNoOptionSpecified, mExportCoordinateSystem),
+                "export coordinate system", failures);
+            if (failures.Count > 0)
+            {
+                throw new InvalidOperationException("Could not restore: " + string.Join(", ", failures));
+            }
+        }
+
+        private static void RestorePreference(Func<bool> restore, string description, List<string> failures)
+        {
+            TryRestore(() =>
+            {
+                if (!restore())
+                {
+                    throw new InvalidOperationException("SolidWorks rejected the restored preference.");
+                }
+            }, description, failures);
         }
 
         //If the user selected something specific for a particular link, that is handled here.

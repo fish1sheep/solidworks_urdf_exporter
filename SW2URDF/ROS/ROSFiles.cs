@@ -99,7 +99,7 @@ namespace SW2URDF.ROS
         ///
         /// Note: URDF files are loaded via the xacro command.
         /// Even plain URDF files without xacro macros are passed through unchanged.
-        /// xacro is a standard dependency of robot_state_publisher.
+        /// xacro is declared as a runtime dependency in the generated package.xml.
         /// </summary>
         /// <returns>The complete Python launch script as a string</returns>
         private string BuildLaunchFileContent()
@@ -116,6 +116,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -170,9 +171,10 @@ def generate_launch_description():
         name='robot_state_publisher',
         output='screen',
         parameters=[{{
-            'robot_description': Command([
-                'xacro ', LaunchConfiguration('urdf_path')
-            ]),
+            'robot_description': ParameterValue(
+                Command(['xacro ""', LaunchConfiguration('urdf_path'), '""']),
+                value_type=str,
+            ),
             'use_sim_time': LaunchConfiguration('use_sim_time'),
         }}],
     )

@@ -321,9 +321,10 @@ namespace SW2URDF.UI
                 {
                     meshFormat = MeshExportFormat.STL;
                 }
-                Exporter.ExportRobot(exportSTL, meshFormat);
-
-                Close();
+                if (Exporter.ExportRobot(exportSTL, meshFormat))
+                {
+                    Close();
+                }
             }
         }
 

@@ -94,6 +94,10 @@ namespace SW2URDF.URDFExport
         public static List<string> FindHiddenComponents(object[] varComp)
         {
             List<string> hiddenComp = new List<string>();
+            if (varComp == null)
+            {
+                return hiddenComp;
+            }
             foreach (object obj in varComp)
             {
                 Component2 comp = (Component2)obj;
@@ -110,15 +114,31 @@ namespace SW2URDF.URDFExport
         {
             AssemblyDoc assyDoc = (AssemblyDoc)model;
             List<Component2> componentsToShow = new List<Component2>();
+            List<Component2> componentsToHide = new List<Component2>();
             object[] varComps = assyDoc.GetComponents(false);
+            if (varComps == null)
+            {
+                return;
+            }
             foreach (Component2 comp in varComps)
             {
                 if (!hiddenComponents.Contains(comp.Name2))
                 {
                     componentsToShow.Add(comp);
                 }
+                else
+                {
+                    componentsToHide.Add(comp);
+                }
             }
-            ShowComponents(model, componentsToShow);
+            if (componentsToShow.Count > 0)
+            {
+                ShowComponents(model, componentsToShow);
+            }
+            if (componentsToHide.Count > 0)
+            {
+                HideComponents(model, componentsToHide);
+            }
         }
 
         //Shows the components in the list. Useful  for exporting STLs

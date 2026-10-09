@@ -23,7 +23,8 @@ namespace SW2URDF.URDFExport.URDFMerge
             Dictionary<string, TreeViewItem> existingNameToItemsLookup = new Dictionary<string, TreeViewItem>();
             foreach (TreeViewItem item in existingItemsList)
             {
-                existingNameToItemsLookup[item.Name] = item;
+                // Link names can contain characters that WPF control names reject.
+                existingNameToItemsLookup[((Link)item.Tag).Name] = item;
             }
 
             Dictionary<string, Link> loadedNameToLinkLookup = new Dictionary<string, Link>();

@@ -86,7 +86,7 @@ namespace SW2URDF.URDF
             foreach (Link child in Children)
             {
                 Link clonedChild = child.Clone();
-                clonedChild.Parent = this;
+                clonedChild.Parent = cloned;
                 cloned.Children.Add(clonedChild);
             }
             return cloned;

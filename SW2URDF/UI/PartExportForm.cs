@@ -120,8 +120,10 @@ namespace SW2URDF.UI
 
             Exporter.URDFRobot.BaseLink.STLQualityFine = radioButton_fine.Checked;
 
-            Exporter.ExportLink(checkBox_rotate.Checked);
-            Close();
+            if (Exporter.ExportLink(checkBox_rotate.Checked))
+            {
+                Close();
+            }
         }
 
         private void ButtonCancelClick(object sender, EventArgs e)

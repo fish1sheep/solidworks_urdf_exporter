@@ -96,7 +96,9 @@ namespace SW2URDF.URDF
                 new string[] { "ament_cmake" },
                 new string[] { },
                 new string[] {
-                    "ros2launch", "robot_state_publisher", "rviz2", "joint_state_publisher_gui" });
+                    "ros2launch", "launch", "launch_ros", "ament_index_python", "xacro",
+                    "robot_state_publisher", "rviz2", "joint_state_publisher",
+                    "joint_state_publisher_gui" });
 
             author = new Author("TODO");
 
@@ -139,6 +141,9 @@ namespace SW2URDF.URDF
 
             // dependencies: buildtool_depend, build_depend, exec_depend
             dependencies.WriteElement(writer);
+
+            // CreateCMakeLists() requires this package when BUILD_TESTING is enabled.
+            writer.WriteElementString("test_depend", "ament_lint_auto");
 
             // export: build_type
             writer.WriteStartElement("export");

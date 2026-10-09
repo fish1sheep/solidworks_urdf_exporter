@@ -21,6 +21,8 @@ THE SOFTWARE.
 */
 
 using SW2URDF.UI;
+using SW2URDF.ROS;
+using SW2URDF.URDF;
 using System;
 using System.IO;
 
@@ -135,10 +137,13 @@ namespace SW2URDF.URDFExport
         /// (package, meshes, urdf, textures, launch, config).
         /// Existing directories are skipped.
         /// </summary>
-        public void CreateDirectories()
+        public void CreateDirectories(bool showMessage = true)
         {
-            MessageBox.Show("Creating URDF Package \"" +
-                PackageName + "\" at:\n" + WindowsPackageDirectory);
+            if (showMessage)
+            {
+                MessageBox.Show("Creating URDF Package \"" +
+                    PackageName + "\" at:\n" + WindowsPackageDirectory);
+            }
             if (!Directory.Exists(WindowsPackageDirectory))
             {
                 Directory.CreateDirectory(WindowsPackageDirectory);
@@ -167,6 +172,24 @@ namespace SW2URDF.URDFExport
             {
                 Directory.CreateDirectory(WindowsRvizDirectory);
             }
+        }
+
+        /// <summary>
+        /// Generates the shared ROS2 package resources without accessing SolidWorks.
+        /// </summary>
+        public void CreatePackageFiles(Robot robot)
+        {
+            CreateDirectories(false);
+            CreateCMakeLists();
+            CreateConfigYAML(robot.GetJointNames(false));
+            CreateDefaultRvizConfig(robot.BaseLink.Name);
+            PackageXMLWriter manifest = new PackageXMLWriter(
+                Path.Combine(WindowsPackageDirectory, "package.xml"));
+            using (manifest.writer)
+            {
+                new PackageXML(PackageName).WriteElement(manifest);
+            }
+            new Rviz(PackageName, robot.Name + ".urdf").WriteFiles(WindowsLaunchDirectory);
         }
 
         /// <summary>
@@ -210,7 +233,7 @@ namespace SW2URDF.URDFExport
                 file.WriteLine("# Install all resource directories into the package share directory");
                 file.WriteLine("# These files are located at runtime via the ament resource index");
                 file.WriteLine("install(");
-                file.WriteLine("  DIRECTORY config launch meshes urdf rviz");
+                file.WriteLine("  DIRECTORY config launch meshes urdf rviz textures");
                 file.WriteLine("  DESTINATION share/${PROJECT_NAME}");
                 file.WriteLine(")");
                 file.WriteLine();
@@ -256,12 +279,12 @@ namespace SW2URDF.URDFExport
                 file.WriteLine();
 
                 // Use the ROS2-neutral "joint_names" key (replaces ROS1 "controller_joint_names")
-                file.WriteLine("joint_names:");
+                file.WriteLine(jointNames.Length == 0 ? "joint_names: []" : "joint_names:");
 
                 // Output each joint name as a YAML list item
                 foreach (String name in jointNames)
                 {
-                    file.WriteLine("  - " + name);
+                    file.WriteLine("  - " + QuoteYamlString(name));
                 }
             }
         }
@@ -270,14 +293,14 @@ namespace SW2URDF.URDFExport
         /// Generates a minimal default RViz2 configuration file (urdf.rviz).
         ///
         /// Provides sensible defaults for visualizing the robot model:
-        ///   - Fixed frame: base_link
+        ///   - Fixed frame: the exported robot's root link
         ///   - Grid display enabled
         ///   - RobotModel display enabled with default URDF path
         ///
         /// Users can customize the configuration by editing this file
         /// or saving a new configuration from within RViz2.
         /// </summary>
-        public void CreateDefaultRvizConfig()
+        public void CreateDefaultRvizConfig(string rootLinkName = "base_link")
         {
             using (StreamWriter file = new StreamWriter(WindowsRvizConfig))
             {
@@ -298,7 +321,7 @@ namespace SW2URDF.URDFExport
                 file.WriteLine("      Visual Enabled: true");
                 file.WriteLine("  Enabled: true");
                 file.WriteLine("  Global Options:");
-                file.WriteLine("    Fixed Frame: base_link");
+                file.WriteLine("    Fixed Frame: " + QuoteYamlString(rootLinkName));
                 file.WriteLine("  Tools:");
                 file.WriteLine("    - Class: rviz_default_plugins/MoveCamera");
                 file.WriteLine("    - Class: rviz_default_plugins/Select");
@@ -308,8 +331,13 @@ namespace SW2URDF.URDFExport
                 file.WriteLine("    Current:");
                 file.WriteLine("      Class: rviz_default_plugins/Orbit");
                 file.WriteLine("      Name: Current View");
-                file.WriteLine("      Target Frame: base_link");
+                file.WriteLine("      Target Frame: " + QuoteYamlString(rootLinkName));
             }
+        }
+
+        private static string QuoteYamlString(string value)
+        {
+            return "'" + value.Replace("'", "''") + "'";
         }
 
         /// <summary>

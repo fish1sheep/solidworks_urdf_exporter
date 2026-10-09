@@ -49,7 +49,6 @@ namespace SW2URDF.UI
                 Tag = link,
                 IsExpanded = true,
                 AllowDrop = true,
-                Name = link.Name,
                 Header = link.Name,
             };
 

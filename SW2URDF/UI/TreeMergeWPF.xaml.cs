@@ -115,7 +115,6 @@ namespace SW2URDF.UI
                 ListBoxItem item = new ListBoxItem
                 {
                     Tag = link,
-                    Name = link.Name,
                     Content = new TextBlock { Text = link.Name }
                 };
                 item.Selected += OnListBoxItemClick;
@@ -585,7 +584,6 @@ namespace SW2URDF.UI
                 Tag = node.Link,
                 IsExpanded = true,
                 AllowDrop = true,
-                Name = node.Name,
                 Header = node.Name,
             };
 
